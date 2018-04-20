@@ -4,21 +4,22 @@
 \alias{projINLA}
 \title{Function to obtain projected estimates from INLA for each time and region.}
 \usage{
-projINLA(data, inla_mod, years, geo, newyear = "15-19", quantiles = c(0.025,
-  0.5, 0.975))
+projINLA(inla_mod, is.yearly = TRUE, year_range = c(1985, 2019),
+  year_label = c("85-89", "90-94", "95-99", "00-04", "05-09", "10-14",
+  "15-19"), Amat = NULL, nsim = 1000)
 }
 \arguments{
-\item{data}{country summary data from \code{\link{countrySummary_mult}}}
-
 \item{inla_mod}{output from \code{\link{fitINLA}}}
 
-\item{years}{years string vector}
+\item{is.yearly}{indicator for whether model is yearly or not}
 
-\item{geo}{geographic polygon object}
+\item{year_range}{range corresponding to year label}
 
-\item{newyear}{string of years for projection, defaults to \code{'15-19'}}
+\item{year_label}{vector of year string vector}
 
-\item{quantiles}{quantiles desired, defaults to \code{c(0.025,0.5,0.975)}}
+\item{Amat}{adjacency matrix}
+
+\item{nsim}{number of simulations}
 }
 \value{
 Results from RW2 model fit, including projection.
@@ -28,28 +29,36 @@ Function to obtain projected estimates from INLA for each time and region.
 }
 \examples{
 \dontrun{
-data(Uganda)
-data(UgandaMap)
-geo <- UgandaMap$geo
-mat <- UgandaMap$Amat
-years <- c("85-89", "90-94", "95-99", "00-04", "05-09", "10-14")
+years <- levels(DemoData[[1]]$time)
 
-# Get direct estimates
-u5m <- countrySummary_mult(births = Uganda, years = years, idVar = "id", 
-regionVar = "region", timeVar = "time", clusterVar = "~clustid+id", 
-ageVar = "age", weightsVar = "weights", geo.recode = NULL)
+# obtain direct estimates
+data <- countrySummary_mult(births = DemoData, 
+years = years, idVar = "id", 
+regionVar = "region", timeVar = "time", 
+clusterVar = "~clustid+id", 
+ageVar = "age", weightsVar = "weights", 
+geo.recode = NULL)
 
-# Get hyper priors
-priors <- simhyper(R = 2, nsamp = 1e+05, nsamp.check = 5000, Amat = mat)
+# obtain maps
+geo <- DemoMap$geo
+mat <- DemoMap$Amat
 
-# Fit INLA models
-data <- data[data$region \%in\% c("central","eastern","northern","western"),]
-inla_model <- fitINLA(data = data, geo = geo, Amat = mat, year_names = years, priors = priors)
+# Simulate hyper priors
+priors <- simhyper(R = 2, nsamp = 1e+05, nsamp.check = 5000, Amat = mat, only.iid = TRUE)
 
+# combine data from multiple surveys
+data <- aggregateSurvey(data)
+
+# Model fitting with INLA
+years.all <- c(years, "15-19")
+fit <- fitINLA(data = data, geo = geo, Amat = mat, 
+year_names = years.all, year_range = c(1985, 2019), 
+priors = priors, rw = 2, is.yearly=TRUE, 
+m = 5, type.st = 4)
 # Projection
-surveylabel <- paste0("DHS ", unique(data$surveyYears)) 
-results_rw2 <- projINLA(data = data, inla_mod = inla_model, years = years, geo = geo, 
-                     newyear = "15-19", quantiles = c(0.025,0.5,0.975))
+out <- projINLA(fit, Amat = mat, is.yearly = TRUE)
+plot(out, is.yearly=TRUE, is.subnational=TRUE) + ggplot2::ggtitle("Subnational yearly model")
+
 }
 
 

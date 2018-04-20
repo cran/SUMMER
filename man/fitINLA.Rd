@@ -2,12 +2,13 @@
 % Please edit documentation in R/fitINLA.R
 \name{fitINLA}
 \alias{fitINLA}
-\title{Fit INLA models to direct estimators.}
+\title{Fit INLA models to direct estimators with a yearly model.}
 \usage{
-fitINLA(data, Amat, geo, formula = NULL, year_names, na.rm = TRUE,
-  redo.prior = FALSE, priors = NULL, useHyper = FALSE, a.iid = NULL,
-  b.iid = NULL, a.rw1 = NULL, b.rw1 = NULL, a.rw2 = NULL,
-  b.rw2 = NULL, a.icar = NULL, b.icar = NULL)
+fitINLA(data, Amat, geo, formula = NULL, rw = 2, is.yearly = TRUE,
+  year_names, year_range = c(1980, 2014), m = 5, na.rm = TRUE,
+  redo.prior = FALSE, priors = NULL, type.st = 1, useHyper = FALSE,
+  a.iid = NULL, b.iid = NULL, a.rw1 = NULL, b.rw1 = NULL,
+  a.rw2 = NULL, b.rw2 = NULL, a.icar = NULL, b.icar = NULL)
 }
 \arguments{
 \item{data}{Combined dataset}
@@ -18,57 +19,83 @@ fitINLA(data, Amat, geo, formula = NULL, year_names, na.rm = TRUE,
 
 \item{formula}{INLA formula. Defaults to RW2, ICAR, IID time, IID, region, IID survey effect, IID time-region interaction, IID survey-region interaction, and IID survey-time-region interaction.}
 
+\item{rw}{Take values 1 or 2, indicating the order of random walk.}
+
+\item{is.yearly}{Logical indicator for fitting yearly or period model.}
+
 \item{year_names}{string vector of year names}
+
+\item{year_range}{Entire range of the years (inclusive) defined in year_names.}
+
+\item{m}{Number of years in each period.}
 
 \item{na.rm}{Logical indicator of whether to remove rows with NA values in the data. Default set to TRUE.}
 
-\item{redo.prior}{Logical indicator of whether to re-estimate hyper parameters}
+\item{redo.prior}{Logical indicator of whether to re-estimate hyperparameters}
 
-\item{priors}{priors from simhyper}
+\item{priors}{priors from \code{\link{simhyper}}}
 
-\item{useHyper}{option to manually set all hyper priors}
+\item{type.st}{type for space-time interaction}
 
-\item{a.iid}{hyper parameter for i.i.d random effects, only need if \code{useHyper = TRUE}}
+\item{useHyper}{option to manually set all hyperpriors}
 
-\item{b.iid}{hyper parameter for i.i.d random effects, only need if \code{useHyper = TRUE}}
+\item{a.iid}{hyperparameter for i.i.d random effects, only need if \code{useHyper = TRUE}}
 
-\item{a.rw1}{hyper parameter for RW1 random effects, only need if \code{useHyper = TRUE}}
+\item{b.iid}{hyperparameter for i.i.d random effects, only need if \code{useHyper = TRUE}}
 
-\item{b.rw1}{hyper parameter for RW1 random effects, only need if \code{useHyper = TRUE}}
+\item{a.rw1}{hyperparameter for RW1 random effects, only need if \code{useHyper = TRUE}}
 
-\item{a.rw2}{hyper parameter for RW2 random effects, only need if \code{useHyper = TRUE}}
+\item{b.rw1}{hyperparameter for RW1 random effects, only need if \code{useHyper = TRUE}}
 
-\item{b.rw2}{hyper parameter for RW2 random effects, only need if \code{useHyper = TRUE}}
+\item{a.rw2}{hyperparameter for RW2 random effects, only need if \code{useHyper = TRUE}}
 
-\item{a.icar}{hyper parameter for ICAR random effects, only need if \code{useHyper = TRUE}}
+\item{b.rw2}{hyperparameter for RW2 random effects, only need if \code{useHyper = TRUE}}
 
-\item{b.icar}{hyper parameter for ICAR random effects, only need if \code{useHyper = TRUE}}
+\item{a.icar}{hyperparameter for ICAR random effects, only need if \code{useHyper = TRUE}}
+
+\item{b.icar}{hyperparameter for ICAR random effects, only need if \code{useHyper = TRUE}}
 }
 \value{
 INLA model fit using the provided formula, country summary data, and geographic data
 }
 \description{
-Fit INLA models to direct estimators.
+Fit INLA models to direct estimators with a yearly model.
 }
 \examples{
 \dontrun{
-data(Uganda)
-data(UgandaMap)
-geo <- UgandaMap$geo
-mat <- UgandaMap$Amat
-years <- c("85-89", "90-94", "95-99", "00-04", "05-09", "10-14")
 
-# Get direct estimates
-u5m <- countrySummary_mult(births = Uganda, years = years, idVar = "id", 
-regionVar = "region", timeVar = "time", clusterVar = "~clustid+id", 
-ageVar = "age", weightsVar = "weights", geo.recode = NULL)
+data(DemoData)
+data(DemoMap)
+years <- levels(DemoData[[1]]$time)
 
-# Get hyper priors
-priors <- simhyper(R = 2, nsamp = 1e+05, nsamp.check = 5000, Amat = mat)
+# obtain direct estimates
+data <- countrySummary_mult(births = DemoData, 
+years = years, idVar = "id", 
+regionVar = "region", timeVar = "time", 
+clusterVar = "~clustid+id", 
+ageVar = "age", weightsVar = "weights", 
+geo.recode = NULL)
 
-# Fit INLA models
-data <- data[data$region \%in\% c("central","eastern","northern","western"),]
-inla_model <- fitINLA(data = data, geo = geo, Amat = mat, year_names = years, priors = priors)
+# obtain maps
+geo <- DemoMap$geo
+mat <- DemoMap$Amat
+
+# Simulate hyperpriors
+priors <- simhyper(R = 2, nsamp = 1e+05, nsamp.check = 5000, Amat = mat, only.iid = TRUE)
+
+# combine data from multiple surveys
+data <- aggregateSurvey(data)
+
+# Model fitting with INLA
+years.all <- c(years, "15-19")
+fit <- fitINLA(data = data, geo = geo, Amat = mat, 
+year_names = years.all, year_range = c(1985, 2019),
+ priors = priors, rw = 2,
+ is.yearly=TRUE, m = 5, type.st = 4)
+# Projection
+out <- projINLA(fit, Amat = mat, is.yearly = TRUE)
+plot(out, is.yearly=TRUE, is.subnational=TRUE) + ggplot2::ggtitle("Subnational yearly model")
+
 }
 
 }

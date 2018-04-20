@@ -14,12 +14,13 @@
 #' @return a matrix of period-region summary of the Horvitz-Thompson direct estimates, the standard errors using delta method for a single survey, the 95\% confidence interval, and the logit of the estimates.
 #' @seealso \code{\link{countrySummary_mult}}
 #' @examples
-#' 
-#' data(Uganda)
+#' \dontrun{
+#' data(DemoData)
 #' years <- c("85-89", "90-94", "95-99", "00-04", "05-09", "10-14")
-#' u5m <- countrySummary(births = Uganda[[1]],  years = years, idVar = "id", 
+#' u5m <- countrySummary(births = DemoData[[1]],  years = years, idVar = "id", 
 #' regionVar = "region", timeVar = "time", clusterVar = "~clustid+id", 
 #' ageVar = "age", weightsVar = "weights", geo.recode = NULL)
+#' }
 #' @export
 countrySummary <- function(births, years, idVar = "v002", regionVar = "region", timeVar = "per5", clusterVar = "~v001+v002",
                            ageVar = "ageGrpD", weightsVar = "v005", geo.recode = NULL) {
@@ -73,18 +74,16 @@ countrySummary <- function(births, years, idVar = "v002", regionVar = "region", 
     }
     
     
-    # setting up survey design object @todo remove this hard-coded ~v001 + v002 by evaluating a string
-    # if (is.null(births$cluster)) {
-    #     births$cluster <- "v001 + v002"
-    #     warning("Cluster not specified. Using v001 + v002", immediate. = TRUE)
-    # }
-
-    
     if (is.null(births$strata)) {
         stop("Strata not defined.")
     }
+    if (is.null(clusterVar)){
+        clusterVar <- paste0("~", idVar)
+        warning(paste("Cluster not specified, use", clusterVar, "instead"), immediate. = TRUE)
+    }
+
     options(survey.lonely.psu = "adjust")
-    my.svydesign <- survey::svydesign(ids = ~id0, cluster = stats::formula(clusterVar), strata = ~strata, nest = T, weights = ~weights0, 
+    my.svydesign <- survey::svydesign(ids = stats::formula(clusterVar), strata = ~strata, nest = T, weights = ~weights0, 
         data = births)
     
     # get region list, sorted alphabetically

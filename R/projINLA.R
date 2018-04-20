@@ -2,73 +2,104 @@
 #' 
 #' 
 #'
-#' @param data country summary data from \code{\link{countrySummary_mult}}
 #' @param inla_mod output from \code{\link{fitINLA}}
-#' @param years years string vector
-#' @param geo geographic polygon object
-#' @param newyear string of years for projection, defaults to \code{'15-19'}
-#' @param quantiles quantiles desired, defaults to \code{c(0.025,0.5,0.975)}
+#' @param is.yearly indicator for whether model is yearly or not
+#' @param year_range range corresponding to year label
+#' @param year_label vector of year string vector
+#' @param Amat adjacency matrix
+#' @param nsim number of simulations
 #' 
 #' @return Results from RW2 model fit, including projection.
 #' 
 #' @examples
 #' \dontrun{
-#' data(Uganda)
-#' data(UgandaMap)
-#' geo <- UgandaMap$geo
-#' mat <- UgandaMap$Amat
-#' years <- c("85-89", "90-94", "95-99", "00-04", "05-09", "10-14")
+#' years <- levels(DemoData[[1]]$time)
 #' 
-#' # Get direct estimates
-#' u5m <- countrySummary_mult(births = Uganda, years = years, idVar = "id", 
-#' regionVar = "region", timeVar = "time", clusterVar = "~clustid+id", 
-#' ageVar = "age", weightsVar = "weights", geo.recode = NULL)
+#' # obtain direct estimates
+#' data <- countrySummary_mult(births = DemoData, 
+#' years = years, idVar = "id", 
+#' regionVar = "region", timeVar = "time", 
+#' clusterVar = "~clustid+id", 
+#' ageVar = "age", weightsVar = "weights", 
+#' geo.recode = NULL)
 #' 
-#' # Get hyper priors
-#' priors <- simhyper(R = 2, nsamp = 1e+05, nsamp.check = 5000, Amat = mat)
+#' # obtain maps
+#' geo <- DemoMap$geo
+#' mat <- DemoMap$Amat
 #' 
-#' # Fit INLA models
-#' data <- data[data$region %in% c("central","eastern","northern","western"),]
-#' inla_model <- fitINLA(data = data, geo = geo, Amat = mat, year_names = years, priors = priors)
+#' # Simulate hyper priors
+#' priors <- simhyper(R = 2, nsamp = 1e+05, nsamp.check = 5000, Amat = mat, only.iid = TRUE)
 #' 
+#' # combine data from multiple surveys
+#' data <- aggregateSurvey(data)
+#' 
+#' # Model fitting with INLA
+#' years.all <- c(years, "15-19")
+#' fit <- fitINLA(data = data, geo = geo, Amat = mat, 
+#' year_names = years.all, year_range = c(1985, 2019), 
+#' priors = priors, rw = 2, is.yearly=TRUE, 
+#' m = 5, type.st = 4)
 #' # Projection
-#' surveylabel <- paste0("DHS ", unique(data$surveyYears)) 
-#' results_rw2 <- projINLA(data = data, inla_mod = inla_model, years = years, geo = geo, 
-#'                      newyear = "15-19", quantiles = c(0.025,0.5,0.975))
+#' out <- projINLA(fit, Amat = mat, is.yearly = TRUE)
+#' plot(out, is.yearly=TRUE, is.subnational=TRUE) + ggplot2::ggtitle("Subnational yearly model")
+#' 
 #' }
 #' 
 #' 
 #' @export
-projINLA <- function(data, inla_mod, years, geo, newyear = "15-19", quantiles = c(0.025, 0.5, 0.975)) {
-    # surveylabel <- paste0('DHS ', unique(data$surveyYears)) timelabel <- years countrylabel <- countryname
-    
-    pdata <- data.frame(data)
-    pdata$years <- factor(pdata$years, levels = years)
-    # model.smoothed <- NULL
-    
-    newyears <- c(years, newyear)
-    proj.index <- length(years) + 1
-    
-    # inla_proj <- NULL
-    results.rw2 <- vector("list", length(newyears))
-    
-    for (i in 1:length(newyears)) {
-        results.rw2[[i]] <- matrix(NA, length(geo$NAME_final), 1000)
-        rownames(results.rw2[[i]]) <- geo$NAME_final
+projINLA <- function(inla_mod, is.yearly=TRUE, year_range = c(1985, 2019), year_label = c("85-89", "90-94", "95-99", "00-04", "05-09", "10-14", "15-19"), 
+                            Amat = NULL, nsim = 1000){
+
+  if (!isTRUE(requireNamespace("INLA", quietly = TRUE))) {
+    stop("You need to install the packages 'INLA'. Please run in your R terminal:\n install.packages('INLA', repos='https://www.math.ntnu.no/inla/R/stable')")
+  }
+  # If INLA is installed, then attach the Namespace (so that all the relevant functions are available)
+  if (isTRUE(requireNamespace("INLA", quietly = TRUE))) {
+    if (!is.element("INLA", (.packages()))) {
+      attachNamespace("INLA")
     }
-    
-    for (j in 1:length(geo$NAME_final)) {
-        # target.num <- j
-        target <- geo$NAME_final[j]
-        proj.rw2 <- projINLA_multi(fitted = inla_mod, proj.time = newyears[proj.index], ntime = length(years), which.area = target, quantiles = quantiles, 
-            return_raw = TRUE)
-        
-        for (i in 1:length(newyears)) {
-            results.rw2[[i]][j, ] <- proj.rw2[i, ]
-        }
+  if(is.null(Amat)){
+    region_names <- "All"
+    region_nums <- 0
+  }else{
+    region_names <- colnames(Amat)
+    region_nums <- 1:length(region_names)
+  }
+  if(is.yearly){
+    timelabel.yearly <- c(year_range[1] : year_range[2], year_label)
+  }else{
+    timelabel.yearly <- year_label
+  }
+  results <- expand.grid(District = region_nums, Year = timelabel.yearly)
+  results$med <- results$q025 <- results$q975 <- results$logit.med <- results$logit.q025 <- results$logit.q975 <- NA
+  mod <- inla_mod$fit
+  lincombs.info <- inla_mod$lincombs.info
+
+  for(i in 1:length(timelabel.yearly)){
+    for(j in 1:length(region_names)){
+        index <- lincombs.info$Index[lincombs.info$District == region_nums[j] & lincombs.info$Year == i]
+        tmp.logit <- INLA::inla.rmarginal(nsim, mod$marginals.lincomb.derived[[index]])
+        marg <- INLA::inla.tmarginal(expit, mod$marginals.lincomb.derived[[index]])
+        tmp <- INLA::inla.rmarginal(nsim, marg)
+
+        results$med[results$District == region_nums[j] & results$Year == timelabel.yearly[i]] <- stats::median(tmp)
+        results$q975[results$District == region_nums[j] & results$Year == timelabel.yearly[i]] <- stats::quantile(tmp, .975)
+        results$q025[results$District == region_nums[j] & results$Year == timelabel.yearly[i]] <- stats::quantile(tmp, .025)
+        results$logit.med[results$District == region_nums[j] & results$Year == timelabel.yearly[i]] <- stats::median(tmp.logit)
+        results$logit.q975[results$District == region_nums[j] & results$Year == timelabel.yearly[i]] <- stats::quantile(tmp.logit, .975)
+        results$logit.q025[results$District == region_nums[j] & results$Year == timelabel.yearly[i]] <- stats::quantile(tmp.logit, .025)
+
     }
-    
-    names(results.rw2) <- newyears
-    
-    return(results.rw2)
+  }
+  results$is.yearly <- !(results$Year %in% year_label)
+  results$Year.num <- suppressWarnings(as.numeric(as.character(results$Year)))
+  if(region_names[1] != "All"){
+    results$District <- region_names[results$District]
+  }
+  # Add S3 method
+  class(results) <- c("projINLA", "data.frame")
+  return(results)
+  }
 }
+
+
