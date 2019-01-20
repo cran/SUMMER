@@ -1,7 +1,7 @@
 Package: SUMMER
 Type: Package
 Title: Spatio-Temporal Under-Five Mortality Methods for Estimation
-Version: 0.2.1
+Version: 0.2.2
 Authors@R: c(
     person(given = "Bryan D", family = "Martin", email= "bmartin6@uw.edu", role = c("cre","aut")), 
     person(given = "Zehang R", family = "Li", email= "lizehang@uw.edu", role = "aut"),
@@ -20,12 +20,12 @@ Imports: maptools, survey, stats, spdep, survival, ggplot2, utils,
         Matrix, reshape2
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 6.0.1
+RoxygenNote: 6.1.0
 Additional_repositories: https://inla.r-inla-download.org/R/stable/
 Suggests: INLA, knitr, rmarkdown, readstata13, gridExtra, R.rsp
 VignetteBuilder: R.rsp, knitr
 NeedsCompilation: no
-Packaged: 2018-07-16 00:37:30 UTC; Bryan
+Packaged: 2019-01-20 21:54:53 UTC; Bryan
 Author: Bryan D Martin [cre, aut],
   Zehang R Li [aut],
   Yuan Hsiao [aut],
@@ -34,4 +34,4 @@ Author: Bryan D Martin [cre, aut],
   Samuel J Clark [aut]
 Maintainer: Bryan D Martin <bmartin6@uw.edu>
 Repository: CRAN
-Date/Publication: 2018-07-16 06:10:15 UTC
+Date/Publication: 2019-01-20 22:30:11 UTC
