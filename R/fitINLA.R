@@ -25,7 +25,10 @@
 #' @param b.rw2 hyperparameter for RW2 random effects, only need if \code{useHyper = TRUE}
 #' @param a.icar hyperparameter for ICAR random effects, only need if \code{useHyper = TRUE}
 #' @param b.icar hyperparameter for ICAR random effects, only need if \code{useHyper = TRUE}
+#' @param options list of options to be passed to control.compute() in the inla() function.
+#' @param verbose logical indicator to print out detailed inla() intermediate steps.
 #' @seealso \code{\link{countrySummary}}
+#' @import Matrix
 #' @importFrom stats dgamma
 #' @importFrom Matrix Diagonal 
 #' @return INLA model fit using the provided formula, country summary data, and geographic data
@@ -38,7 +41,7 @@
 #' 
 #' # obtain direct estimates
 #' data <- countrySummary_mult(births = DemoData, 
-#' years = years, idVar = "id", 
+#' years = years, 
 #' regionVar = "region", timeVar = "time", 
 #' clusterVar = "~clustid+id", 
 #' ageVar = "age", weightsVar = "weights", 
@@ -67,7 +70,7 @@
 #' }
 #' 
 #' @export
-fitINLA <- function(data, Amat, geo, formula = NULL, rw = 2, is.yearly = TRUE, year_names, year_range = c(1980, 2014), m = 5, na.rm = TRUE, redo.prior = FALSE, priors = NULL, type.st = 1, useHyper = FALSE, a.iid = NULL, b.iid = NULL, a.rw1 = NULL, b.rw1 = NULL, a.rw2 = NULL, b.rw2 = NULL, a.icar = NULL, b.icar = NULL){
+fitINLA <- function(data, Amat, geo, formula = NULL, rw = 2, is.yearly = TRUE, year_names, year_range = c(1980, 2014), m = 5, na.rm = TRUE, redo.prior = FALSE, priors = NULL, type.st = 1, useHyper = FALSE, a.iid = NULL, b.iid = NULL, a.rw1 = NULL, b.rw1 = NULL, a.rw2 = NULL, b.rw2 = NULL, a.icar = NULL, b.icar = NULL, options = list(dic = T, mlik = T, cpo = T, openmp.strategy = 'default'), verbose = FALSE){
 
   # check region names in Amat is consistent
   if(!is.null(Amat)){
@@ -87,6 +90,9 @@ fitINLA <- function(data, Amat, geo, formula = NULL, rw = 2, is.yearly = TRUE, y
 
   if (!isTRUE(requireNamespace("INLA", quietly = TRUE))) {
     stop("You need to install the packages 'INLA'. Please run in your R terminal:\n install.packages('INLA', repos='https://www.math.ntnu.no/inla/R/stable')")
+  }
+  if (!is.element("Matrix", (.packages()))) {
+    attachNamespace("Matrix")
   }
   # If INLA is installed, then attach the Namespace (so that all the relevant functions are available)
   if (isTRUE(requireNamespace("INLA", quietly = TRUE))) {
@@ -184,7 +190,7 @@ fitINLA <- function(data, Amat, geo, formula = NULL, rw = 2, is.yearly = TRUE, y
       if (!exists("my.cache", envir = envir, mode = "list")) {
         nn = n %/% m
         stopifnot (nn == as.integer(n/m))
-        R = Diagonal(n, x = rep(1, n))
+        R = Matrix::Diagonal(n, x = rep(1, n))
         A = matrix(0, nn, n)
         j = 1
         for(i in 1:nn) {
@@ -262,9 +268,9 @@ fitINLA <- function(data, Amat, geo, formula = NULL, rw = 2, is.yearly = TRUE, y
     if (!exists("my.cache", envir = envir, mode = "list")) {
       nn = n %/% m
       stopifnot (nn == as.integer(n/m))
-      R1 = Diagonal(n, x = rep(1, n))
+      R1 = Matrix::Diagonal(n, x = rep(1, n))
       R2 = inla.rw(n, order = order, scale.model=TRUE, sparse=TRUE)
-      R3 = Diagonal(S, x = rep(1, S))
+      R3 = Matrix::Diagonal(S, x = rep(1, S))
       R4 = Amat
       diag(R4) <- 0
       diag <- apply(R4, 1, sum)
@@ -293,7 +299,7 @@ fitINLA <- function(data, Amat, geo, formula = NULL, rw = 2, is.yearly = TRUE, y
         j = j + m
       }
       A = inla.as.sparse(A)
-      D = Diagonal(nn*S, x=1)
+      D = Matrix::Diagonal(nn*S, x=1)
       assign("my.cache", list(R=INLA::inla.as.sparse(R), A=A, D=D, nn=nn), envir = envir)
     } 
     
@@ -371,18 +377,18 @@ fitINLA <- function(data, Amat, geo, formula = NULL, rw = 2, is.yearly = TRUE, y
     #################################################################### Re-calculate hyper-priors
     # Todo: make it work with the new Q matrix!!
     
-    if (redo.prior) {
+    if (redo.prior || is.null(priors)) {
       priors <- simhyper(R = 2, nsamp = 1e+05, nsamp.check = 5000, Amat = Amat, nperiod = length(year_names))
     }
     
-    a.iid <- priors$a.iid
-    b.iid <- priors$b.iid
-    a.rw1 <- priors$a.iid
-    b.rw1 <- priors$a.iid
-    a.rw2 <- priors$a.iid
-    b.rw2 <- priors$a.iid
-    a.icar <- priors$a.iid
-    b.icar <- priors$a.iid
+    if(is.null(a.iid)) a.iid <- priors$a.iid
+    if(is.null(b.iid)) b.iid <- priors$b.iid
+    if(is.null(a.rw1)) a.rw1 <- priors$a.iid
+    if(is.null(b.rw1)) b.rw1 <- priors$b.iid
+    if(is.null(a.rw2)) a.rw2 <- priors$a.iid
+    if(is.null(b.rw2)) b.rw2 <- priors$b.iid
+    if(is.null(a.icar)) a.icar <- priors$a.iid
+    if(is.null(b.icar)) b.icar <- priors$b.iid
     
     #################################################################### # remove NA rows? e.g. if no 10-14 available
     if (na.rm) {
@@ -719,8 +725,8 @@ fitINLA <- function(data, Amat, geo, formula = NULL, rw = 2, is.yearly = TRUE, y
     
     # -- fitting the model in INLA -- #
 
-      inla11 <- INLA::inla(mod, family = "gaussian", control.compute = list(dic = T, mlik = T, cpo = T), data = exdat, control.predictor = list(compute = TRUE), control.family = list(hyper= list(prec = list(initial= log(1), fixed= TRUE ))), scale = exdat$logit.prec, 
-                           lincomb = lincombs.yearly)
+      inla11 <- INLA::inla(mod, family = "gaussian", control.compute = options, data = exdat, control.predictor = list(compute = TRUE), control.family = list(hyper= list(prec = list(initial= log(1), fixed= TRUE ))), scale = exdat$logit.prec, 
+                           lincomb = lincombs.yearly, control.inla = list(int.strategy = "ccd"), verbose = verbose)
     
     return(list(model = mod, fit = inla11, Amat = Amat, newdata = exdat, time = seq(0, N - 1), area = seq(0, region_count - 
                                                                                                             1), survey.time = survey.time, survey.area = survey.area, time.area = time.area, survey.time.area = survey.time.area, 
