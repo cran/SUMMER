@@ -1,4 +1,4 @@
-#' Fit INLA models to direct estimators with a yearly model.
+#' Fit space-time smoothing models to mortality rates 
 #' 
 #' 
 #' 
@@ -6,71 +6,76 @@
 #' @param data Combined dataset
 #' @param geo Geo file
 #' @param Amat Adjacency matrix for the regions
-#' @param formula INLA formula. Defaults to RW2, ICAR, IID time, IID, region, IID survey effect, IID time-region interaction, IID survey-region interaction, and IID survey-time-region interaction. 
-#' @param year_names string vector of year names
+#' @param formula INLA formula. See vignette for example of using customized formula.
+#' @param year_label string vector of year names
 #' @param na.rm Logical indicator of whether to remove rows with NA values in the data. Default set to TRUE.
-#' @param redo.prior Logical indicator of whether to re-estimate hyperparameters
 #' @param priors priors from \code{\link{simhyper}}
-#' @param useHyper option to manually set all hyperpriors
 #' @param rw Take values 1 or 2, indicating the order of random walk.
 #' @param is.yearly Logical indicator for fitting yearly or period model.
-#' @param year_range Entire range of the years (inclusive) defined in year_names.
+#' @param year_range Entire range of the years (inclusive) defined in year_label.
 #' @param m Number of years in each period.
 #' @param type.st type for space-time interaction
-#' @param a.iid hyperparameter for i.i.d random effects, only need if \code{useHyper = TRUE}
-#' @param b.iid hyperparameter for i.i.d random effects, only need if \code{useHyper = TRUE}
-#' @param a.rw1 hyperparameter for RW1 random effects, only need if \code{useHyper = TRUE}
-#' @param b.rw1 hyperparameter for RW1 random effects, only need if \code{useHyper = TRUE}
-#' @param a.rw2 hyperparameter for RW2 random effects, only need if \code{useHyper = TRUE}
-#' @param b.rw2 hyperparameter for RW2 random effects, only need if \code{useHyper = TRUE}
-#' @param a.icar hyperparameter for ICAR random effects, only need if \code{useHyper = TRUE}
-#' @param b.icar hyperparameter for ICAR random effects, only need if \code{useHyper = TRUE}
+#' @param hyper which hyperpriors to use. Default to be using the PC prior ("pc"). 
+#' @param pc.u hyperparameter U for the PC prior on precisions.
+#' @param pc.alpha hyperparameter alpha for the PC prior on precisions.
+#' @param pc.u.phi hyperparameter U for the PC prior on the mixture probability phi in BYM2 model.
+#' @param pc.alpha.phi hyperparameter alpha for the PC prior on the mixture probability phi in BYM2 model.
+#' @param a.iid hyperparameter for i.i.d random effects.
+#' @param b.iid hyperparameter for i.i.d random effects.
+#' @param a.rw hyperparameter for RW 1 or 2 random effects.
+#' @param b.rw hyperparameter for RW 1 or 2random effects.
+#' @param a.icar hyperparameter for ICAR random effects.
+#' @param b.icar hyperparameter for ICAR random effects.
 #' @param options list of options to be passed to control.compute() in the inla() function.
 #' @param verbose logical indicator to print out detailed inla() intermediate steps.
-#' @seealso \code{\link{countrySummary}}
+#' @seealso \code{\link{getDirect}}
 #' @import Matrix
 #' @importFrom stats dgamma
 #' @importFrom Matrix Diagonal 
 #' @return INLA model fit using the provided formula, country summary data, and geographic data
 #' @examples
 #' \dontrun{
-#' 
-#' data(DemoData)
-#' data(DemoMap)
 #' years <- levels(DemoData[[1]]$time)
 #' 
 #' # obtain direct estimates
-#' data <- countrySummary_mult(births = DemoData, 
-#' years = years, 
+#' data <- getDirectList(births = DemoData, 
+#' years = years,  
 #' regionVar = "region", timeVar = "time", 
 #' clusterVar = "~clustid+id", 
 #' ageVar = "age", weightsVar = "weights", 
 #' geo.recode = NULL)
+#' # obtain direct estimates
+#' data_multi <- getDirectList(births = DemoData, years = years,
+#'   regionVar = "region",  timeVar = "time", clusterVar = "~clustid+id",
+#'   ageVar = "age", weightsVar = "weights", geo.recode = NULL)
+#' data <- aggregateSurvey(data_multi)
 #' 
-#' # obtain maps
-#' geo <- DemoMap$geo
-#' mat <- DemoMap$Amat
-#' 
-#' # Simulate hyperpriors
-#' priors <- simhyper(R = 2, nsamp = 1e+05, nsamp.check = 5000, Amat = mat, only.iid = TRUE)
-#' 
-#' # combine data from multiple surveys
-#' data <- aggregateSurvey(data)
-#' 
-#' # Model fitting with INLA
+#' #  national model
 #' years.all <- c(years, "15-19")
-#' fit <- fitINLA(data = data, geo = geo, Amat = mat, 
-#' year_names = years.all, year_range = c(1985, 2019),
-#'  priors = priors, rw = 2,
-#'  is.yearly=TRUE, m = 5, type.st = 4)
-#' # Projection
-#' out <- projINLA(fit, Amat = mat, is.yearly = TRUE)
-#' plot(out, is.yearly=TRUE, is.subnational=TRUE) + ggplot2::ggtitle("Subnational yearly model")
+#' fit1 <- fitINLA(data = data, geo = NULL, Amat = NULL, 
+#'   year_label = years.all, year_range = c(1985, 2019), 
+#'   rw = 2, is.yearly=FALSE, m = 5)
+#' out1 <- getSmoothed(fit1)
+#' plot(out1, is.subnational=FALSE)
+#' 
+#' #  subnational model
+#' fit2 <- fitINLA(data = data, geo = geo, Amat = mat, 
+#'   year_label = years.all, year_range = c(1985, 2019), 
+#'   rw = 2, is.yearly=TRUE, m = 5, type.st = 4)
+#' out2 <- getSmoothed(fit2, Amat = mat)
+#' plot(out2, is.yearly=TRUE, is.subnational=TRUE)
+#' 
 #' 
 #' }
-#' 
 #' @export
-fitINLA <- function(data, Amat, geo, formula = NULL, rw = 2, is.yearly = TRUE, year_names, year_range = c(1980, 2014), m = 5, na.rm = TRUE, redo.prior = FALSE, priors = NULL, type.st = 1, useHyper = FALSE, a.iid = NULL, b.iid = NULL, a.rw1 = NULL, b.rw1 = NULL, a.rw2 = NULL, b.rw2 = NULL, a.icar = NULL, b.icar = NULL, options = list(dic = T, mlik = T, cpo = T, openmp.strategy = 'default'), verbose = FALSE){
+fitINLA <- function(data, Amat, geo, formula = NULL, rw = 2, is.yearly = TRUE, year_label, year_range = c(1980, 2014), m = 5, na.rm = TRUE, priors = NULL, type.st = 1, hyper = c("pc", "gamma")[1], pc.u = 1, pc.alpha = 0.01, pc.u.phi = 0.5, pc.alpha.phi = 2/3, a.iid = NULL, b.iid = NULL, a.rw = NULL, b.rw = NULL, a.icar = NULL, b.icar = NULL, options = list(dic = T, mlik = T, cpo = T, openmp.strategy = 'default'), verbose = FALSE){
+
+
+  if(m == 1){
+    if(is.yearly) warning("Switched to period model because m = 1.")
+    is.yearly = FALSE
+  }
+
 
   # check region names in Amat is consistent
   if(!is.null(Amat)){
@@ -103,265 +108,7 @@ fitINLA <- function(data, Amat, geo, formula = NULL, rw = 2, is.yearly = TRUE, y
 
     tau = exp(10)
 
-    ## ---------------------------------------------------------
-    ## New definition of the yearly + multi-year Q structure
-    ## ---------------------------------------------------------
-     rw.new = function(cmd = c("graph", "Q", "mu", "initial", "log.norm.const", "log.prior", "quit"), theta = NULL){
-      ## assume 'tau', 'order', 'n' and 'm' 'n' is the dim of RW and 'm' is the aggregated length,
-      ## averaging over n/m variables, non-overlapping
-      
-      ## the environment of this function which holds the variables and we can store 'my.cache'
-      ## there.
-      envir = environment(sys.call()[[1]]) 
-      if(is.null(envir)) envir <- environment()
-      inla.rw = utils::getFromNamespace("inla.rw", "INLA")
-      inla.ginv = utils::getFromNamespace("inla.ginv", "INLA")
-      
-      if (!exists("my.cache", envir = envir, mode = "list")) {
-        nn = n %/% m
-        stopifnot (nn == as.integer(n/m))
-        R = inla.rw(n, order = order,  scale.model=TRUE, sparse=TRUE)
-        A = matrix(0, nn, n)
-        j = 1
-        for(i in 1:nn) {
-          A[i, j:(j+m-1)] = 1/m
-          j = j + m
-        }
-        A = inla.as.sparse(A)
-        D = Matrix::Diagonal(nn, x=1)
-        assign("my.cache", list(R=R, A=A, D=D, nn=nn), envir = envir)
-      } 
-      
-      interpret.theta = function() {
-        return(list(kappa = exp(theta[1L])))
-      }
-      
-      graph = function() {
-        return (Q())
-      }
-      
-      Q = function() {
-        QQ = rbind(cbind(p$kappa * my.cache$R + tau * t(my.cache$A) %*% my.cache$A,
-                         -tau * t(my.cache$A)),
-                   cbind(-tau * my.cache$A, tau * my.cache$D))
-        return(QQ)
-      }
-      
-      mu = function() {
-        return(numeric(0))
-      }
-      
-      log.norm.const = function() {
-        val = (n-order) * (-0.5 * log(2 * pi) + 0.5 * log(p$kappa)) +
-          (my.cache$nn * (-0.5 * log(2 * pi) + 0.5 * log(tau)))
-        return(val)
-      }
-      
-      log.prior = function() {
-        val = dgamma(p$kappa, shape = shape0, rate = rate0, log = TRUE) + theta[1]
-        return(val)
-      }
-      
-      initial = function() {
-        return(4)
-      }
-      
-      quit = function() {
-        return(invisible())
-      }
-      
-      ## as some calls to this function does not define 'theta',  its convenient to have to
-      ## defined still (like in the graph-function)
-      if (is.null(theta))
-        theta = initial()
-      
-      p = interpret.theta()
-      val = do.call(match.arg(cmd), args = list())
-      return(val)
-     }   
-    
-    ## ---------------------------------------------------------
-    ## New definition of the yearly + multi-year Q structure
-    ## ---------------------------------------------------------
-      iid.new = function(cmd = c("graph", "Q", "mu", "initial", "log.norm.const", "log.prior", "quit"), theta = NULL){
-      
-      envir = environment(sys.call()[[1]]) 
-            if(is.null(envir)) envir <- environment()
-      if (!exists("my.cache", envir = envir, mode = "list")) {
-        nn = n %/% m
-        stopifnot (nn == as.integer(n/m))
-        R = Matrix::Diagonal(n, x = rep(1, n))
-        A = matrix(0, nn, n)
-        j = 1
-        for(i in 1:nn) {
-          A[i, j:(j+m-1)] = 1/m
-          j = j + m
-        }
-        A = inla.as.sparse(A)
-        D = Matrix::Diagonal(nn, x=1)
-        assign("my.cache", list(R=R, A=A, D=D, nn=nn), envir = envir)
-      } 
-      
-      interpret.theta = function() {
-        return(list(kappa = exp(theta[1L])))
-      }
-      
-      graph = function() {
-        return (Q())
-      }
-      
-      Q = function() {
-        QQ = rbind(cbind(p$kappa * my.cache$R + tau * t(my.cache$A) %*% my.cache$A,
-                         -tau * t(my.cache$A)),
-                   cbind(-tau * my.cache$A, tau * my.cache$D))
-        return(QQ)
-      }
-      
-      mu = function() {
-        return(numeric(0))
-      }
-      
-      log.norm.const = function() {
-        val = (n * (-0.5 * log(2 * pi) + 0.5 * log(p$kappa)) +
-          (my.cache$nn * (-0.5 * log(2 * pi) + 0.5 * log(tau))))
-        return(val)
-      }
-      
-      log.prior = function() {
-        val = dgamma(p$kappa, shape = shape0, rate = rate0, log = TRUE) + theta[1]
-        return(val)
-      }
-      
-      initial = function() {
-        return(4)
-      }
-      
-      quit = function() {
-        return(invisible())
-      }
-      
-      ## as some calls to this function does not define 'theta',  its convenient to have to
-      ## defined still (like in the graph-function)
-      if (is.null(theta))
-        theta = initial()
-      
-      p = interpret.theta()
-      val = do.call(match.arg(cmd), args = list())
-      return(val)
-    }  
-
-    
-    ## ---------------------------------------------------------
-    ## New definition of the yearly + multi-year structured Q
-    ## ---------------------------------------------------------
-    st.new = function(cmd = c("graph", "Q", "mu", "initial", "log.norm.const", "log.prior", "quit"), theta = NULL){
-    
-    envir = environment(sys.call()[[1]]) 
-          if(is.null(envir)) envir <- environment()
-    inla.rw = utils::getFromNamespace("inla.rw", "INLA")
-    inla.ginv = utils::getFromNamespace("inla.ginv", "INLA")
-    # The new structure takes the following order
-    # (x_11, ..., x_1T, ..., x_S1, ..., x_ST, xx_11, ..., xx_1t, ..., xx_S1, ..., xx_St)
-    #  x_ij : random effect of region i, year j 
-    # xx_ik : random effect of region i, period k
-
-    if (!exists("my.cache", envir = envir, mode = "list")) {
-      nn = n %/% m
-      stopifnot (nn == as.integer(n/m))
-      R1 = Matrix::Diagonal(n, x = rep(1, n))
-      R2 = inla.rw(n, order = order, scale.model=TRUE, sparse=TRUE)
-      R3 = Matrix::Diagonal(S, x = rep(1, S))
-      R4 = Amat
-      diag(R4) <- 0
-      diag <- apply(R4, 1, sum)
-      R4[R4 != 0] <- -1
-      diag(R4) <- diag
-
-      R4 <- INLA::inla.scale.model(R4, constr = list(A=matrix(1,1,dim(R4)[1]), e=0))
-      # both independent
-      if(type == 1){
-          R <- R3 %x% R1
-      # AR * independent    
-      }else if(type == 2){
-          R <- R3 %x% R2
-      # independent * besag    
-      }else if(type == 3){
-          R <- R4 %x% R1
-      # AR * besag
-      }else if(type == 4){
-          R <- R4 %x% R2
-      }
-
-      A = matrix(0, nn*S, n*S)
-      j = 1
-      for(i in 1:(nn*S)) {
-        A[i, j:(j+m-1)] = 1/m
-        j = j + m
-      }
-      A = inla.as.sparse(A)
-      D = Matrix::Diagonal(nn*S, x=1)
-      assign("my.cache", list(R=INLA::inla.as.sparse(R), A=A, D=D, nn=nn), envir = envir)
-    } 
-    
-    interpret.theta = function() {
-      return(list(kappa = exp(theta[1L])))
-    }
-    
-    graph = function() {
-      return (Q())
-    }
-    
-    Q = function() {
-      QQ = rbind(cbind(p$kappa * my.cache$R + tau * t(my.cache$A) %*% my.cache$A,
-                         -tau * t(my.cache$A)),
-                   cbind(-tau * my.cache$A, tau * my.cache$D))
-      return(QQ)
-    }
-    
-    mu = function() {
-      return(numeric(0))
-    }
-    ## Type I   : S * n
-    ## Type II  : S * (n - order)
-    ## Type III : (S-1) * n 
-    ## Type IV  : (S-1) * (n - order)
-    log.norm.const = function() {
-      df <- S * n
-      if(type == 2){
-        df <- S * (n - order)
-      }else if(type == 3){
-        df <- (S-1) * n
-      }else if(type == 4){
-        df <- (S-1) * (n - order)
-      }
-      val = (df * (-0.5 * log(2 * pi) + 0.5 * log(p$kappa)) +
-        (S * my.cache$nn * (-0.5 * log(2 * pi) + 0.5 * log(tau))))
-      return(val)
-    }
-    
-    log.prior = function() {
-      val = dgamma(p$kappa, shape = shape0, rate = rate0, log = TRUE) + theta[1]
-      return(val)
-    }
-    
-    initial = function() {
-      return(4)
-    }
-    
-    quit = function() {
-      return(invisible())
-    }
-    
-    ## as some calls to this function does not define 'theta',  its convenient to have to
-    ## defined still (like in the graph-function)
-    if (is.null(theta))
-      theta = initial()
-    
-    p = interpret.theta()
-    val = do.call(match.arg(cmd), args = list())
-    return(val)
-  }  
-
+   
     
     ## ---------------------------------------------------------
     ## Common Setup
@@ -375,18 +122,15 @@ fitINLA <- function(data, Amat, geo, formula = NULL, rw = 2, is.yearly = TRUE, y
       data <- data[which(data$region != "All"), ]
     }  
     #################################################################### Re-calculate hyper-priors
-    # Todo: make it work with the new Q matrix!!
     
-    if (redo.prior || is.null(priors)) {
-      priors <- simhyper(R = 2, nsamp = 1e+05, nsamp.check = 5000, Amat = Amat, nperiod = length(year_names))
+    if (is.null(priors)) {
+      priors <- simhyper(R = 2, nsamp = 1e+05, nsamp.check = 5000, Amat = Amat, nperiod = length(year_label), only.iid = TRUE)
     }
     
     if(is.null(a.iid)) a.iid <- priors$a.iid
     if(is.null(b.iid)) b.iid <- priors$b.iid
-    if(is.null(a.rw1)) a.rw1 <- priors$a.iid
-    if(is.null(b.rw1)) b.rw1 <- priors$b.iid
-    if(is.null(a.rw2)) a.rw2 <- priors$a.iid
-    if(is.null(b.rw2)) b.rw2 <- priors$b.iid
+    if(is.null(a.rw)) a.rw <- priors$a.iid
+    if(is.null(b.rw)) b.rw <- priors$b.iid
     if(is.null(a.icar)) a.icar <- priors$a.iid
     if(is.null(b.icar)) b.icar <- priors$b.iid
     
@@ -413,11 +157,12 @@ fitINLA <- function(data, Amat, geo, formula = NULL, rw = 2, is.yearly = TRUE, y
     }
     
     # -- creating IDs for the spatial REs -- #
-    dat$region.struct <- dat$region.unstruct <- dat$region_number
+    dat$region.struct <- dat$region.unstruct <- dat$region.int <- dat$region_number
     
     ################################################################### get the lsit of region and numeric index in one data frame
     if(is.yearly){
       n <- year_range[2] - year_range[1] + 1
+      if(n %% m  != 0) stop("The year_range specification is not a multiple of m. Please check that  year_range contains the first and last  year of the periods used. For example, if the last period is 2015-2019, the second element in year_range should be 2019.")
       nn <- n %/% m
       N <- n + nn
       rw.model <- INLA::inla.rgeneric.define(model = rw.new,
@@ -425,14 +170,28 @@ fitINLA <- function(data, Amat, geo, formula = NULL, rw = 2, is.yearly = TRUE, y
                                        m = m,
                                        order = rw,
                                        tau = exp(10),
-                                       shape0 = a.rw2,
-                                       rate0 = b.rw2) 
-      iid.model.time <- INLA::inla.rgeneric.define(model = iid.new,
+                                       shape0 = a.rw,
+                                       rate0 = b.rw) 
+      iid.model <- INLA::inla.rgeneric.define(model = iid.new,
                                              n = n, 
                                              m = m,
                                              tau = exp(10),
                                              shape0 = a.iid,
                                              rate0 = b.iid)
+
+      rw.model.pc <- INLA::inla.rgeneric.define(model = rw.new.pc,
+                                       n = n, 
+                                       m = m,
+                                       order = rw,
+                                       tau = exp(10),
+                                       u0 = pc.u,
+                                       alpha0 = pc.alpha) 
+      iid.model.pc <- INLA::inla.rgeneric.define(model = iid.new.pc,
+                                             n = n, 
+                                             m = m,
+                                             tau = exp(10),
+                                             u0 = pc.u,
+                                             alpha0 = pc.alpha) 
       if(!is.null(geo)){
          st.model <- INLA::inla.rgeneric.define(model = st.new,
                                        n = n, 
@@ -444,10 +203,20 @@ fitINLA <- function(data, Amat, geo, formula = NULL, rw = 2, is.yearly = TRUE, y
                                        tau = exp(10),
                                        shape0 = a.iid,
                                        rate0 = b.iid)
+         st.model.pc <- INLA::inla.rgeneric.define(model = st.new.pc,
+                                       n = n, 
+                                       m = m,
+                                       order = rw,
+                                       S = region_count,
+                                       Amat = Amat,
+                                       type = type.st,
+                                       tau = exp(10),
+                                       u0 = pc.u,
+                                       alpha0 = pc.alpha) 
        }
       
-      year_names_new <- c(as.character(c(year_range[1]:year_range[2])), year_names)
-      time.index <- cbind.data.frame(idx = 1:N, Year = year_names_new)
+      year_label_new <- c(as.character(c(year_range[1]:year_range[2])), year_label)
+      time.index <- cbind.data.frame(idx = 1:N, Year = year_label_new)
       constr = list(A = matrix(c(rep(1, n), rep(0, nn)), 1, N), e = 0)
       
       if(type.st %in% c(2, 4)){
@@ -474,18 +243,18 @@ fitINLA <- function(data, Amat, geo, formula = NULL, rw = 2, is.yearly = TRUE, y
       }else{
         constr.st <- list(A = tmp, e = rep(0, dim(tmp)[1]))
       }
-      years <- data.frame(year = year_names_new[1:N], year_number = seq(1, N))
+      years <- data.frame(year = year_label_new[1:N], year_number = seq(1, N))
     }else{
       n <- 0
-      N <- nn <- length(year_names)
-      years <- data.frame(year = year_names, year_number = seq(1, N))      
+      N <- nn <- length(year_label)
+      years <- data.frame(year = year_label, year_number = seq(1, N))      
     }
     
     # -- creating IDs for the temporal REs -- #
     if(is.yearly){
-      dat$time.unstruct <- dat$time.struct <- years[match(dat$years, years[, 1]), 2]
+      dat$time.unstruct <- dat$time.struct <- dat$time.int <- years[match(dat$years, years[, 1]), 2]
     }else{
-      dat$time.unstruct <- dat$time.struct <- years[match(dat$years, years[, 1]), 2]
+      dat$time.unstruct <- dat$time.struct <- dat$time.int <- years[match(dat$years, years[, 1]), 2]
     }
     
     ################################################################## get the number of surveys
@@ -540,72 +309,197 @@ fitINLA <- function(data, Amat, geo, formula = NULL, rw = 2, is.yearly = TRUE, y
     
     ########################## Model Selection ######
     
-    # -- subset of not missing and not direct estimate of 0 -- #
+    ## -- subset of not missing and not direct estimate of 0 -- #
     exdat <- newdata
-    exdat <- exdat[!is.na(exdat$logit.est) && exdat$logit.est > (-20), ]
-    
-    
+    # exdat <- exdat[!is.na(exdat$logit.est) && exdat$logit.est > (-20), ]
+  
+
+  if(is.null(formula)){
+        period.constr <- NULL
+        # Tmax <- length(year_label)            
+        # if(rw == 2) period.constr <- list(A = matrix(c(rep(1, Tmax)), 1, Tmax), e = 0)
+        if(rw %in% c(1, 2) == FALSE) stop("Random walk only support rw = 1 or 2.")
+   
+     ## ---------------------------------------------------------
+    ## Setup PC prior model
     ## ---------------------------------------------------------
-    ## Setup yearly model
-    ## ---------------------------------------------------------
-    if(is.yearly && (!is.null(geo))){   
-      if (is.null(formula)) {
-        if(rw == 1){
-          formula <- logit.est ~ f(time.struct, model = rw.model, diagonal = 1e-6, extraconstr = constr, values = 1:N) + f(region.unstruct,model="iid",param=c(a.iid,b.iid)) + f(region.struct, graph=Amat,model="besag",param=c(a.icar,b.icar), scale.model = TRUE) + f(time.unstruct,model=iid.model.time) + f(time.area,model=st.model, diagonal = 1e-6, extraconstr = constr.st, values = 1:(N*S))
-        }else if(rw == 2 && type.st %in% c(2, 4)){
-          formula <- logit.est ~ f(time.struct, model = rw.model, diagonal = 1e-6, extraconstr = constr, values = 1:N) + f(region.unstruct,model="iid",param=c(a.iid,b.iid)) + f(region.struct, graph=Amat,model="besag",param=c(a.icar,b.icar), scale.model = TRUE) + f(time.unstruct,model=iid.model.time) + f(time.area,model=st.model, diagonal = 1e-6, extraconstr = constr.st, values = 1:(N*S))
-        }else if(rw == 2){
-          formula <- logit.est ~ f(time.struct, model = rw.model, diagonal = 1e-6, extraconstr = constr, values = 1:N) + f(region.unstruct,model="iid",param=c(a.iid,b.iid)) + f(region.struct, graph=Amat,model="besag",param=c(a.icar,b.icar), scale.model = TRUE) + f(time.unstruct,model=iid.model.time) + f(time.area,model=st.model, diagonal = 1e-6, extraconstr = constr.st, values = 1:(N*S))
+    if(tolower(hyper) == "pc"){
+        hyperpc1 <- list(prec = list(prior = "pc.prec", param = c(pc.u , pc.alpha)))
+        hyperpc2 <- list(prec = list(prior = "pc.prec", param = c(pc.u , pc.alpha)), 
+                         phi = list(prior = 'pc', param = c(pc.u.phi , pc.alpha.phi)))
+        
+        ## -----------------------
+        ## Period + National + PC
+        ## ----------------------- 
+        if(!is.yearly && is.null(geo)){
+
+              formula <- logit.est ~ 
+                            f(time.struct,model=paste0("rw", rw), constr = TRUE,  extraconstr = period.constr, hyper = hyperpc1) + 
+                            f(time.unstruct,model="iid", hyper = hyperpc1) 
+
+        ## -----------------------
+        ## Yearly + National + PC
+        ## -----------------------
+        }else if(is.yearly && is.null(geo)){
+
+          formula <- logit.est ~ 
+              f(time.struct, model = rw.model.pc, diagonal = 1e-6, extraconstr = constr, values = 1:N) + 
+              f(time.unstruct,model=iid.model.pc) 
+            
+
+        ## -------------------------
+        ## Period + Subnational + PC
+        ## ------------------------- 
+        }else if(!is.yearly && (!is.null(geo))){
+
+            formula <- logit.est ~ 
+                f(time.struct, model=paste0("rw", rw), hyper = hyperpc1, scale.model = TRUE, extraconstr = period.constr)  + 
+                f(time.unstruct,model="iid", hyper = hyperpc1) + 
+                f(region.struct, graph=Amat,model="bym2", hyper = hyperpc2, scale.model = TRUE, adjust.for.con.comp = TRUE)  
+
+            if(type.st == 1){
+                formula <- update(formula, ~. + 
+                    f(time.area,model="iid", hyper = hyperpc1))
+            }else if(type.st == 2){
+                formula <- update(formula, ~. + 
+                    f(region.int,model="iid", group=time.int,control.group=list(model=paste0("rw", rw), scale.model = TRUE), hyper = hyperpc1))
+            }else if(type.st == 3){
+                formula <- update(formula, ~. + 
+                    f(region.int, model="besag", graph = Amat, group=time.int,control.group=list(model="iid"), hyper = hyperpc1, scale.model = TRUE, adjust.for.con.comp = TRUE))
+            }else{
+
+
+              # defines type IV explicitly with constraints
+              # Use time.area as index
+              # S blocks each with time 1:T (in this code, 1:N)
+              # UPDATE for connected components:
+              # nc2 sum-to-zero constraints for each of the connected components of size >= 2. Scaled so that the geometric mean of the marginal variances in each connected component of size >= 2 is 1, and modified so that singletons have a standard Normal distribution.
+
+             inla.rw = utils::getFromNamespace("inla.rw", "INLA")
+             R2 <- inla.rw(N, order = rw, scale.model=TRUE, sparse=TRUE)
+             R4 = Amat
+             diag(R4) <- 0
+             diag <- apply(R4, 1, sum)
+             R4[R4 != 0] <- -1
+             diag(R4) <- diag
+             R4 <- INLA::inla.scale.model(R4, constr = list(A=matrix(1,1,dim(R4)[1]), e=0))
+             R <- R4 %x% R2
+             tmp <- matrix(0, S, N * S)
+             for(i in 1:S){
+               tmp[i, ((i-1)*N + 1) : (i*N)] <- 1
+             }
+             tmp2 <- matrix(0, N, N * S)
+             for(i in 1:N){
+                tmp2[i , which((1:(N*S)) %% N == i-1)] <- 1
+             }
+             tmp <- rbind(tmp, tmp2)
+             constr.st <- list(A = tmp, e = rep(0, dim(tmp)[1]))
+             
+
+             formula <- update(formula, ~. + 
+                    f(time.area,model="generic0", Cmatrix = R, extraconstr = constr.st, rankdef = N*S -(N - rw)*(S - 1), hyper = hyperpc1))
+            }
           
+        ## ------------------------- 
+        ## Yearly + Subnational + PC
+        ## ------------------------- 
         }else{
-          stop("Random walk order should be 1 or 2.")
+              formula <- logit.est ~ 
+                  f(time.struct, model = rw.model.pc, diagonal = 1e-6, extraconstr = constr, values = 1:N) +
+                  f(time.unstruct,model=iid.model.pc) + 
+                  f(region.struct, graph=Amat,model="bym2", hyper = hyperpc2, scale.model = TRUE, adjust.for.con.comp = TRUE) + 
+                  f(time.area,model=st.model.pc, diagonal = 1e-6, extraconstr = constr.st, values = 1:(N*S))
         }
-      }
-      
-      
-      ## ---------------------------------------------------------
-      ## Setup non-yearly model
-      ## ---------------------------------------------------------
-    }else if((!is.yearly) && (!is.null(geo))){
-      if (is.null(formula)) {
-        if(rw == 1){
-          formula <- logit.est ~ f(region.unstruct,model="iid",param=c(a.iid,b.iid)) + f(region.struct, graph=Amat,model="besag",param=c(a.icar,b.icar), scale.model = TRUE) + f(time.struct,model="rw1",param=c(a.rw1,b.rw1))  + f(time.unstruct,model="iid",param=c(a.iid,b.iid)) + f(time.area,model="iid", param=c(a.iid,b.iid))
-        }else if(rw == 2){
-          formula <- logit.est ~ f(region.unstruct,model="iid",param=c(a.iid,b.iid)) + f(region.struct, graph=Amat,model="besag",param=c(a.icar,b.icar), scale.model = TRUE) + f(time.struct,model="rw2",param=c(a.rw2,b.rw2))  +
-            f(time.unstruct,model="iid",param=c(a.iid,b.iid)) + f(time.area,model="iid", param=c(a.iid,b.iid))
+
+    ## ---------------------------------------------------------
+    ## Setup Gamma prior model
+    ## ---------------------------------------------------------
+    }else if(tolower(hyper) == "gamma"){
+        ## ------------------- 
+        ## Period + National
+        ## ------------------- 
+        if(!is.yearly && is.null(geo)){
+            formula <- logit.est ~ 
+              f(time.struct,model=paste0("rw", rw),param=c(a.rw,b.rw), constr = TRUE)  + 
+              f(time.unstruct,model="iid",param=c(a.iid,b.iid)) 
+            
+        ## ------------------- 
+        ## Yearly + National
+        ## -------------------   
+        }else if(is.yearly && is.null(geo)){
+           formula <- logit.est ~ 
+                  f(time.struct, model = rw.model, diagonal = 1e-6, extraconstr = constr, values = 1:N) + 
+                  f(time.unstruct,model=iid.model) 
+            
+        ## ------------------- 
+        ## Period + Subnational
+        ## ------------------- 
+        }else if(!is.yearly && (!is.null(geo))){
+       
+            formula <- logit.est ~ 
+                  f(time.struct,model=paste0("rw", rw), param=c(a.rw,b.rw), scale.model = TRUE, extraconstr = period.constr)  + 
+                  f(time.unstruct,model="iid",param=c(a.iid,b.iid)) + 
+                  f(region.struct, graph=Amat,model="besag",param=c(a.icar,b.icar), scale.model = TRUE, adjust.for.con.comp = TRUE) + 
+                  f(region.unstruct,model="iid",param=c(a.iid,b.iid)) 
+                  
+            if(type.st == 1){
+                formula <- update(formula, ~. + f(time.area,model="iid", param=c(a.iid,b.iid)))
+            }else if(type.st == 2){
+                formula <- update(formula, ~. + f(region.int,model="iid", group=time.int,control.group=list(model="rw2", scale.model = TRUE), param=c(a.iid,b.iid)))
+            }else if(type.st == 3){
+                formula <- update(formula, ~. + f(region.int,model="besag", graph = Amat, group=time.int,control.group=list(model="iid"),param=c(a.iid,b.iid), scale.model = TRUE, adjust.for.con.comp = TRUE))
+            }else{
+                
+
+              # defines type IV explicitly with constraints
+              # Use time.area as index
+              # S blocks each with time 1:T (in this code, 1:N)
+              # UPDATE!
+
+             inla.rw = utils::getFromNamespace("inla.rw", "INLA")
+             R2 <- inla.rw(N, order = rw, scale.model=TRUE, sparse=TRUE)
+             R4 = Amat
+             diag(R4) <- 0
+             diag <- apply(R4, 1, sum)
+             R4[R4 != 0] <- -1
+             diag(R4) <- diag
+             R4 <- INLA::inla.scale.model(R4, constr = list(A=matrix(1,1,dim(R4)[1]), e=0))
+             R <- R4 %x% R2
+             tmp <- matrix(0, S, N * S)
+             for(i in 1:S){
+               tmp[i, ((i-1)*N + 1) : (i*N)] <- 1
+             }
+             tmp2 <- matrix(0, N, N * S)
+             for(i in 1:N){
+                tmp2[i , which((1:(N*S)) %% N == i-1)] <- 1
+             }
+             tmp <- rbind(tmp, tmp2)
+             constr.st <- list(A = tmp, e = rep(0, dim(tmp)[1]))
+             
+
+             formula <- update(formula, ~. + 
+                    f(time.area,model="generic0", Cmatrix = R, extraconstr = constr.st, rankdef = N*S -(N - rw)*(S - 1), param=c(a.iid,b.iid)))
+            }
+         
+          
+        ## ------------------- 
+        ## Yearly + Subnational
+        ## ------------------- 
         }else{
-          stop("Random walk order should be 1 or 2.")
+            formula <- logit.est ~ 
+              f(time.struct, model = rw.model, diagonal = 1e-6, extraconstr = constr, values = 1:N) + 
+              f(time.unstruct,model=iid.model) + 
+              f(region.struct, graph=Amat,model="besag",param=c(a.icar,b.icar), scale.model = TRUE, adjust.for.con.comp = TRUE) + 
+              f(region.unstruct,model="iid",param=c(a.iid,b.iid)) + 
+              f(time.area,model=st.model, diagonal = 1e-6, extraconstr = constr.st, values = 1:(N*S)) 
         }
-      }
-      ## ---------------------------------------------------------
-      ## Setup yearly national model
-      ## --------------------------------------------------------- 
-    }else if(is.yearly && is.null(geo)){   
-      if (is.null(formula)) {
-        if(rw == 1){
-          formula <- logit.est ~ f(time.struct, model = rw.model, diagonal = 1e-6, extraconstr = constr, values = 1:N) + f(time.unstruct,model=iid.model.time) 
-        }else if(rw == 2){
-          formula <- logit.est ~ f(time.struct, model = rw.model, diagonal = 1e-6, extraconstr = constr, values = 1:N) + f(time.unstruct,model=iid.model.time)
-        }else{
-          stop("Random walk order should be 1 or 2.")
-        }
-      }
-      
-      ## ---------------------------------------------------------
-      ## Setup non-yearly national model
-      ## ---------------------------------------------------------
-    }else if((!is.yearly) && (is.null(geo))){
-      if (is.null(formula)) {
-        if(rw == 1){
-          formula <- logit.est ~ f(time.struct,model="rw1",param=c(a.rw1,b.rw1))  + f(time.unstruct,model="iid",param=c(a.iid,b.iid), scale.model = TRUE) 
-        }else if(rw == 2){
-          formula <- logit.est ~ f(time.struct,model="rw2",param=c(a.rw2,b.rw2))  +
-            f(time.unstruct,model="iid",param=c(a.iid,b.iid)) 
-        }else{
-          stop("Random walk order should be 1 or 2.")
-        }
-      }
-    }  
+
+    }else{
+      stop("hyper needs to be either pc or gamma.")
+    }
+}
+
+
     mod <- formula
     
     
@@ -633,37 +527,53 @@ fitINLA <- function(data, Amat, geo, formula = NULL, rw = 2, is.yearly = TRUE, y
           object.name <- paste("lc", index, sep = "")
           
           lincombs.info[index, c("District", "Year")] <- c(j,i)
-          if(rw == 1){
-            assign(object.name, INLA::inla.make.lincomb("(Intercept)" = 1,
-                                                  time.area = spacetime,
-                                                  time.struct= time ,
-                                                  time.unstruct= time,
-                                                  region.struct = area,
-                                                  region.unstruct = area))          
-          }else if(is.yearly && type.st %in% c(2, 4) && rw == 2){
-            # the name of the third argument is changed later
-            assign(object.name, INLA::inla.make.lincomb("(Intercept)" = 1,
-                                                  time.area = spacetime,
-                                                  time.struct= time ,
-                                                  time.unstruct= time,
-                                                  region.struct = area,
-                                                  region.unstruct = area))
+          # BYM model under Gamma prior
+          if(hyper == "gamma"){
+            if(is.yearly || type.st%in% c(1, 4)){
+              assign(object.name, INLA::inla.make.lincomb("(Intercept)" = 1,
+                                                    time.area = spacetime,
+                                                    time.struct= time ,
+                                                    time.unstruct= time,
+                                                    region.struct = area,
+                                                    region.unstruct = area))
+            }else{
+              newidx <- rep(0, j + (i - 1) * region_count)
+              newidx[j + (i - 1) * region_count] <- 1
+              assign(object.name, INLA::inla.make.lincomb("(Intercept)" = 1,
+                                                    time.struct= time ,
+                                                    time.unstruct= time,
+                                                    region.struct = area,
+                                                    region.unstruct = area,
+                                                    region.int = newidx))
+
+            }
+          # BYM2 model under PC prior
           }else{
-            assign(object.name, INLA::inla.make.lincomb("(Intercept)" = 1,
-                                                  time.area = spacetime,
-                                                  time.struct= time ,
-                                                  time.unstruct= time,
-                                                  region.struct = area,
-                                                  region.unstruct = area))
+            if(is.yearly || type.st %in% c(1, 4)){
+              assign(object.name, INLA::inla.make.lincomb("(Intercept)" = 1,
+                                                    time.area = spacetime,
+                                                    time.struct= time ,
+                                                    time.unstruct= time,
+                                                    region.struct = area))
+            }else{
+              newidx <- rep(0, j + (i - 1) * region_count)
+              newidx[j + (i - 1) * region_count] <- 1
+              assign(object.name, INLA::inla.make.lincomb("(Intercept)" = 1,
+                                                    time.struct= time ,
+                                                    time.unstruct= time,
+                                                    region.struct = area,
+                                                    region.int = newidx))
+
+            }
           }
-          
+           
           if(index == 1){
-            lincombs.yearly <- get(object.name)
-            names(lincombs.yearly)[index] <- object.name
+            lincombs.fit <- get(object.name)
+            names(lincombs.fit)[index] <- object.name
           }else{
             tmp <- get(object.name)
-            lincombs.yearly <- c(lincombs.yearly, tmp)
-            names(lincombs.yearly)[index] <- object.name
+            lincombs.fit <- c(lincombs.fit, tmp)
+            names(lincombs.fit)[index] <- object.name
           }
         }
       }
@@ -694,43 +604,35 @@ fitINLA <- function(data, Amat, geo, formula = NULL, rw = 2, is.yearly = TRUE, y
         }
         
         if(index == 1){
-          lincombs.yearly <- get(object.name)
-          names(lincombs.yearly)[index] <- object.name
+          lincombs.fit <- get(object.name)
+          names(lincombs.fit)[index] <- object.name
         }else{
-          lincombs.yearly <- c(lincombs.yearly, get(object.name))
-          names(lincombs.yearly)[index] <- object.name
+          lincombs.fit <- c(lincombs.fit, get(object.name))
+          names(lincombs.fit)[index] <- object.name
         }
       }
     }
     
-    # if(is.yearly){
-    # rbind yearly data with NA for the lincombs
+
     for(i in 1:N){
       tmp<-exdat[match(unique(exdat$region), exdat$region), ]
-      tmp$time.unstruct<-tmp$time.struct<- i
+      tmp$time.unstruct<-tmp$time.struct<- tmp$time.int <- i
       tmp$logit.est<-tmp$logit.prec<-tmp$survey<-NA
       tmp <- tmp[, colnames(tmp) != "time.area"]
       tmp <- merge(tmp, time.area, by = c("region_number", "time.unstruct"))
       tmp$years<-years[i, 1]
-      tmp$u5m <- tmp$lower <- tmp$upper <- tmp$var.est <- NA
-      if("u5m.nohiv" %in% colnames(data)){
-        tmp$u5m.nohiv <- tmp$lower.nohiv <- tmp$upper.nohiv <- tmp$var.est.nohiv<- tmp$logit.prec.nohiv<- tmp$logit.est.nohiv <- NA          
+      tmp$mean <- tmp$lower <- tmp$upper <- tmp$var.est <- NA
+      if("mean.nohiv" %in% colnames(data)){
+        tmp$mean.nohiv <- tmp$lower.nohiv <- tmp$upper.nohiv <- tmp$var.est.nohiv<- tmp$logit.prec.nohiv<- tmp$logit.est.nohiv <- NA          
       }
       exdat<-rbind(exdat,tmp)   
     }
-    # }
-    
-    
-    
-    
-    # -- fitting the model in INLA -- #
 
-      inla11 <- INLA::inla(mod, family = "gaussian", control.compute = options, data = exdat, control.predictor = list(compute = TRUE), control.family = list(hyper= list(prec = list(initial= log(1), fixed= TRUE ))), scale = exdat$logit.prec, 
-                           lincomb = lincombs.yearly, control.inla = list(int.strategy = "ccd"), verbose = verbose)
+
+
+    fit <- INLA::inla(mod, family = "gaussian", control.compute = options, data = exdat, control.predictor = list(compute = TRUE), control.family = list(hyper= list(prec = list(initial= log(1), fixed= TRUE ))), scale = exdat$logit.prec, lincomb = lincombs.fit, control.inla = list(int.strategy = "ccd"), verbose = verbose)
     
-    return(list(model = mod, fit = inla11, Amat = Amat, newdata = exdat, time = seq(0, N - 1), area = seq(0, region_count - 
-                                                                                                            1), survey.time = survey.time, survey.area = survey.area, time.area = time.area, survey.time.area = survey.time.area, 
-                a.iid = a.iid, b.iid = b.iid, a.rw1 = a.rw1, b.rw1 = b.rw1, a.rw2 = a.rw2, b.rw2 = b.rw2, a.icar = a.icar, b.icar = b.icar, lincombs.info = lincombs.info))
+    return(list(model = mod, fit = fit, Amat = Amat, newdata = exdat, time = seq(0, N - 1), area = seq(0, region_count - 1), survey.time = survey.time, survey.area = survey.area, time.area = time.area, survey.time.area = survey.time.area, a.iid = a.iid, b.iid = b.iid, a.rw = a.rw, b.rw = b.rw, a.rw = a.rw, b.rw = b.rw, a.icar = a.icar, b.icar = b.icar, lincombs.info = lincombs.info, is.yearly = is.yearly, type.st = type.st, year_range = year_range))
     
   }
   

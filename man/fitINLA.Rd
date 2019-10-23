@@ -2,15 +2,15 @@
 % Please edit documentation in R/fitINLA.R
 \name{fitINLA}
 \alias{fitINLA}
-\title{Fit INLA models to direct estimators with a yearly model.}
+\title{Fit space-time smoothing models to mortality rates}
 \usage{
 fitINLA(data, Amat, geo, formula = NULL, rw = 2, is.yearly = TRUE,
-  year_names, year_range = c(1980, 2014), m = 5, na.rm = TRUE,
-  redo.prior = FALSE, priors = NULL, type.st = 1, useHyper = FALSE,
-  a.iid = NULL, b.iid = NULL, a.rw1 = NULL, b.rw1 = NULL,
-  a.rw2 = NULL, b.rw2 = NULL, a.icar = NULL, b.icar = NULL,
-  options = list(dic = T, mlik = T, cpo = T, openmp.strategy =
-  "default"), verbose = FALSE)
+  year_label, year_range = c(1980, 2014), m = 5, na.rm = TRUE,
+  priors = NULL, type.st = 1, hyper = c("pc", "gamma")[1],
+  pc.u = 1, pc.alpha = 0.01, pc.u.phi = 0.5, pc.alpha.phi = 2/3,
+  a.iid = NULL, b.iid = NULL, a.rw = NULL, b.rw = NULL,
+  a.icar = NULL, b.icar = NULL, options = list(dic = T, mlik = T, cpo
+  = T, openmp.strategy = "default"), verbose = FALSE)
 }
 \arguments{
 \item{data}{Combined dataset}
@@ -19,43 +19,45 @@ fitINLA(data, Amat, geo, formula = NULL, rw = 2, is.yearly = TRUE,
 
 \item{geo}{Geo file}
 
-\item{formula}{INLA formula. Defaults to RW2, ICAR, IID time, IID, region, IID survey effect, IID time-region interaction, IID survey-region interaction, and IID survey-time-region interaction.}
+\item{formula}{INLA formula. See vignette for example of using customized formula.}
 
 \item{rw}{Take values 1 or 2, indicating the order of random walk.}
 
 \item{is.yearly}{Logical indicator for fitting yearly or period model.}
 
-\item{year_names}{string vector of year names}
+\item{year_label}{string vector of year names}
 
-\item{year_range}{Entire range of the years (inclusive) defined in year_names.}
+\item{year_range}{Entire range of the years (inclusive) defined in year_label.}
 
 \item{m}{Number of years in each period.}
 
 \item{na.rm}{Logical indicator of whether to remove rows with NA values in the data. Default set to TRUE.}
 
-\item{redo.prior}{Logical indicator of whether to re-estimate hyperparameters}
-
 \item{priors}{priors from \code{\link{simhyper}}}
 
 \item{type.st}{type for space-time interaction}
 
-\item{useHyper}{option to manually set all hyperpriors}
+\item{hyper}{which hyperpriors to use. Default to be using the PC prior ("pc").}
 
-\item{a.iid}{hyperparameter for i.i.d random effects, only need if \code{useHyper = TRUE}}
+\item{pc.u}{hyperparameter U for the PC prior on precisions.}
 
-\item{b.iid}{hyperparameter for i.i.d random effects, only need if \code{useHyper = TRUE}}
+\item{pc.alpha}{hyperparameter alpha for the PC prior on precisions.}
 
-\item{a.rw1}{hyperparameter for RW1 random effects, only need if \code{useHyper = TRUE}}
+\item{pc.u.phi}{hyperparameter U for the PC prior on the mixture probability phi in BYM2 model.}
 
-\item{b.rw1}{hyperparameter for RW1 random effects, only need if \code{useHyper = TRUE}}
+\item{pc.alpha.phi}{hyperparameter alpha for the PC prior on the mixture probability phi in BYM2 model.}
 
-\item{a.rw2}{hyperparameter for RW2 random effects, only need if \code{useHyper = TRUE}}
+\item{a.iid}{hyperparameter for i.i.d random effects.}
 
-\item{b.rw2}{hyperparameter for RW2 random effects, only need if \code{useHyper = TRUE}}
+\item{b.iid}{hyperparameter for i.i.d random effects.}
 
-\item{a.icar}{hyperparameter for ICAR random effects, only need if \code{useHyper = TRUE}}
+\item{a.rw}{hyperparameter for RW 1 or 2 random effects.}
 
-\item{b.icar}{hyperparameter for ICAR random effects, only need if \code{useHyper = TRUE}}
+\item{b.rw}{hyperparameter for RW 1 or 2random effects.}
+
+\item{a.icar}{hyperparameter for ICAR random effects.}
+
+\item{b.icar}{hyperparameter for ICAR random effects.}
 
 \item{options}{list of options to be passed to control.compute() in the inla() function.}
 
@@ -65,46 +67,43 @@ fitINLA(data, Amat, geo, formula = NULL, rw = 2, is.yearly = TRUE,
 INLA model fit using the provided formula, country summary data, and geographic data
 }
 \description{
-Fit INLA models to direct estimators with a yearly model.
+Fit space-time smoothing models to mortality rates
 }
 \examples{
 \dontrun{
-
-data(DemoData)
-data(DemoMap)
 years <- levels(DemoData[[1]]$time)
 
 # obtain direct estimates
-data <- countrySummary_mult(births = DemoData, 
-years = years, 
+data <- getDirectList(births = DemoData, 
+years = years,  
 regionVar = "region", timeVar = "time", 
 clusterVar = "~clustid+id", 
 ageVar = "age", weightsVar = "weights", 
 geo.recode = NULL)
+# obtain direct estimates
+data_multi <- getDirectList(births = DemoData, years = years,
+  regionVar = "region",  timeVar = "time", clusterVar = "~clustid+id",
+  ageVar = "age", weightsVar = "weights", geo.recode = NULL)
+data <- aggregateSurvey(data_multi)
 
-# obtain maps
-geo <- DemoMap$geo
-mat <- DemoMap$Amat
-
-# Simulate hyperpriors
-priors <- simhyper(R = 2, nsamp = 1e+05, nsamp.check = 5000, Amat = mat, only.iid = TRUE)
-
-# combine data from multiple surveys
-data <- aggregateSurvey(data)
-
-# Model fitting with INLA
+#  national model
 years.all <- c(years, "15-19")
-fit <- fitINLA(data = data, geo = geo, Amat = mat, 
-year_names = years.all, year_range = c(1985, 2019),
- priors = priors, rw = 2,
- is.yearly=TRUE, m = 5, type.st = 4)
-# Projection
-out <- projINLA(fit, Amat = mat, is.yearly = TRUE)
-plot(out, is.yearly=TRUE, is.subnational=TRUE) + ggplot2::ggtitle("Subnational yearly model")
+fit1 <- fitINLA(data = data, geo = NULL, Amat = NULL, 
+  year_label = years.all, year_range = c(1985, 2019), 
+  rw = 2, is.yearly=FALSE, m = 5)
+out1 <- getSmoothed(fit1)
+plot(out1, is.subnational=FALSE)
+
+#  subnational model
+fit2 <- fitINLA(data = data, geo = geo, Amat = mat, 
+  year_label = years.all, year_range = c(1985, 2019), 
+  rw = 2, is.yearly=TRUE, m = 5, type.st = 4)
+out2 <- getSmoothed(fit2, Amat = mat)
+plot(out2, is.yearly=TRUE, is.subnational=TRUE)
+
 
 }
-
 }
 \seealso{
-\code{\link{countrySummary}}
+\code{\link{getDirect}}
 }

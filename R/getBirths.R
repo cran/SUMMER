@@ -10,8 +10,11 @@
 #' @param alive variable name for the indicator of whether child was alive or dead at the time of interview.
 #' @param age variable name for the age at death of the child in completed months.
 #' @param date.interview variable name for the date of interview.
-#' @param month.cut The cutoff of each bins of age group in the unit of months. Default values are 1, 12, 24, 36, 48, and 60, representing the age groups (0, 1), [1, 12), [12, 24), ..., [48, 60).
-#' @param year.cut The cutoff of each bins of time periods, including both boundaries. Default values are 1980, 1985, ..., 2020, representing the time periods 80-84, 85-89, ..., 15-19.
+#' @param month.cut the cutoff of each bins of age group in the unit of months. Default values are 1, 12, 24, 36, 48, and 60, representing the age groups (0, 1), [1, 12), [12, 24), ..., [48, 60).
+#' @param year.cut The cutoff of each bins of time periods, including both boundaries. Default values are 1980, 1985, ..., 2020, representing the time periods 80-84, 85-89, ..., 15-19. Notice that if each bin contains one year, the last year in the output is max(year.cut)-1. For example, if year.cut = 1980:2020, the last year in the output is 2019.
+#' @param cmc.adjust number of months to add to the recorded month in the dataset. Some DHS surveys does not use Gregorian calendar (the calendar used in most of the world). For example, the Ethiopian calendar is 92 months behind the Gregorian calendar in general. Then we can set cmc.adjust to 92, which adds 92 months to all dates in the dataset, effectively transforming the Ethiopian calendar to the Gregorian calendar.  
+#' @param compact logical indicator of whether the compact format is returned. In the compact output, person months are aggregated by cluster, age, and time. Total number of person months and deaths in each group are returned instead of the raw person-months.
+#' @param compact.by vector of variables to summarize the compact form by. 
 #' 
 #' @return This function returns a new data frame where each row indicate a person-month, with the additional variables specified in the function argument.
 #' @examples 
@@ -21,24 +24,25 @@
 #' }
 #' 
 #' @export
-getBirths <- function(filepath = NULL, data = NULL, surveyyear, variables = c("caseid", "v001", "v002", "v004", "v005", "v021", "v022", "v023", "v024", "v025", "v139", "bidx"), strata=c("v024", "v025"), dob = "b3", alive = "b5", age = "b7", date.interview= "v008", month.cut = c(1,12,24,36,48,60), year.cut=seq(1980, 2020, by=5)) {
+getBirths <- function(filepath = NULL, data = NULL, surveyyear = NA, variables = c("caseid", "v001", "v002", "v004", "v005", "v021", "v022", "v023", "v024", "v025", "v139", "bidx"), strata=c("v024", "v025"), dob = "b3", alive = "b5", age = "b7", date.interview= "v008", month.cut = c(1,12,24,36,48,60), year.cut=seq(1980, 2020, by=5), cmc.adjust = 0, compact = FALSE, compact.by = c('v001',"v024", "v025", "v005")) {
   if(is.null(data)){
       dat <- suppressWarnings(readstata13::read.dta13(filepath, generate.factors = TRUE))    
   }else{
       dat <- data.frame(data)
   }
   
+  period.1yr <- year.cut[2] - year.cut[1] == 1
   surveyyear <- surveyyear - 1900
   year.cut <- year.cut - 1900
   variables <- union(variables, strata)
   datnew <- dat[, variables] 
+  dat[, alive] <- tolower(dat[, alive])
   
-  
-  datnew$dob <- dat[, dob]
+  datnew$dob <- dat[, dob] + cmc.adjust
   datnew$survey_year <- surveyyear
-  datnew$obsStart <- dat[, dob]
-  datnew$dod <- dat[, dob] + dat[, age]
-  datnew$obsStop <- dat[, date.interview]
+  datnew$obsStart <- dat[, dob] + cmc.adjust
+  datnew$dod <- dat[, dob] + dat[, age] + cmc.adjust 
+  datnew$obsStop <- dat[, date.interview] + cmc.adjust
   datnew$obsStop[dat[, alive] == "no"] <- datnew$dod[dat[, alive] == "no"]
   datnew$died <- (dat[, alive] == "no")
   
@@ -61,7 +65,7 @@ getBirths <- function(filepath = NULL, data = NULL, surveyyear, variables = c("c
   
   test <- test[test$agemonth<max(month.cut), ]
   test <- test[test$year>=year.cut[1], ]
-  test <- test[test$year<test$survey_year, ]
+  test <- test[test$year<year.cut[length(year.cut)], ]
   
   test$tstop <- NULL
   
@@ -92,25 +96,31 @@ getBirths <- function(filepath = NULL, data = NULL, surveyyear, variables = c("c
   test$age <- factor(test$age)
   levels(test$age) <- bins #c("0","1-11","12-23","24-35","36-47","48-59")
   
+  if(period.1yr){
+      test$time <- year.cut[1] + 1900 
+      year.bin <-  year.cut[1] + 1900
+      for(i in 2:(length(year.cut)-1)){
+        test$time[test$year >= year.cut[i] & test$year < year.cut[i+1]] <- year.cut[i] + 1900
+        year.bin <- c(year.bin, year.cut[i] + 1900)
+      }
+  }else{
+      year.cut2 <- year.cut
+      year.cut2[year.cut2 >= 100] <- as.character(year.cut2[year.cut2 >= 100] - 100)
+      year.cut2[as.numeric(year.cut2) < 10] <- paste0("0", year.cut2[as.numeric(year.cut2) < 10])
+      year.cut3 <- year.cut - 1
+      year.cut3[year.cut3 >= 100] <- as.character(year.cut3[year.cut3 >= 100] - 100)
+      year.cut3[as.numeric(year.cut3) < 10] <- paste0("0", year.cut3[as.numeric(year.cut3) < 10])
 
-  year.cut2 <- year.cut
-  year.cut2[year.cut2 >= 100] <- as.character(year.cut2[year.cut2 >= 100] - 100)
-  year.cut2[as.numeric(year.cut2) < 10] <- paste0("0", year.cut2[as.numeric(year.cut2) < 10])
-  year.cut3 <- year.cut - 1
-  year.cut3[year.cut3 >= 100] <- as.character(year.cut3[year.cut3 >= 100] - 100)
-  year.cut3[as.numeric(year.cut3) < 10] <- paste0("0", year.cut3[as.numeric(year.cut3) < 10])
-
-  test$time <- paste(year.cut[1], year.cut[2] - 1, sep = "-")
-  year.bin <- paste(year.cut[1], year.cut[2] - 1, sep = "-")
-  for(i in 2:(length(year.cut)-1)){
-    test$time[test$year >= year.cut[i] & test$year < year.cut[i+1]] <- paste(year.cut2[i], year.cut3[i+1], sep = "-")
-    year.bin <- c(year.bin, paste(year.cut2[i], year.cut3[i+1], sep = "-"))
+      test$time <- paste(year.cut[1], year.cut[2] - 1, sep = "-")
+      year.bin <- paste(year.cut[1], year.cut[2] - 1, sep = "-")
+      for(i in 2:(length(year.cut)-1)){
+        test$time[test$year >= year.cut[i] & test$year < year.cut[i+1]] <- paste(year.cut2[i], year.cut3[i+1], sep = "-")
+        year.bin <- c(year.bin, paste(year.cut2[i], year.cut3[i+1], sep = "-"))
+      }
   }
-  # test$time[test$year > 89] <- "90-94"
-  # test$time[test$year > 94] <- "95-99"
-  # test$time[test$year > 99] <- "00-04"
-  # test$time[test$year > 104] <- "05-09"
-  # test$time[test$year > 109] <- "10-14"
+
+
+
   test$time <- factor(test$time, levels = year.bin)
   
   if(length(strata) == 0){
@@ -121,5 +131,15 @@ getBirths <- function(filepath = NULL, data = NULL, surveyyear, variables = c("c
     test$strata <- do.call(paste, c(test[strata], sep="."))
   }
   test$survey_year <- test$survey_year + 1900
+
+  if(compact){
+      test.comp <- test[, c(compact.by, "age", "strata", "time", "died")]
+      test.comp$total <- 1
+      formula <- as.formula(paste0(".~age + time + strata + ", paste(compact.by, collapse = " + ")))
+      test.comp <- aggregate(formula, data = test.comp, FUN = sum, drop = TRUE)
+     test <- test.comp
+  }
+
+
   return(test)
 }
