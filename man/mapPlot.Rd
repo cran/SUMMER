@@ -2,15 +2,16 @@
 % Please edit documentation in R/mapPlot.R
 \name{mapPlot}
 \alias{mapPlot}
-\title{Makes map plot.}
+\title{Plot region-level variables on a map}
 \usage{
-mapPlot(data, variables, values = NULL, labels = NULL, geo, by.data,
-  by.geo, is.long = FALSE, size = 0.5, removetab = FALSE,
+mapPlot(data = NULL, variables, values = NULL, labels = NULL, geo,
+  by.data, by.geo, is.long = FALSE, size = 0.5, removetab = FALSE,
   border = "gray20", ncol = NULL, ylim = NULL, legend.label = NULL,
-  per1000 = FALSE, clean = TRUE)
+  per1000 = FALSE, clean = TRUE, size.label = 2, add.adj = FALSE,
+  color.adj = "red", alpha.adj = 0.85, direction = 1)
 }
 \arguments{
-\item{data}{a data frame with variables to be plotted}
+\item{data}{a data frame with variables to be plotted. When it is null, a map is produced.}
 
 \item{variables}{vector of variables to be plotted. If long format of data is used, only one variable can be selected}
 
@@ -18,7 +19,7 @@ mapPlot(data, variables, values = NULL, labels = NULL, geo, by.data,
 
 \item{labels}{vector of labels to use for each variable, only used when wide format of data is used}
 
-\item{geo}{\code{geo} output from \code{\link{read_shape}}}
+\item{geo}{SpatialPolygonsDataFrame object for the map}
 
 \item{by.data}{column name specifying region names in the data}
 
@@ -40,8 +41,17 @@ mapPlot(data, variables, values = NULL, labels = NULL, geo, by.data,
 
 \item{per1000}{logical indicator to plot mortality rates as rates per 1,000 live births. Note that the added comparison data should always be in the probability scale.}
 
-\item{clean}{remove all coordinates for a cleaner layout, default to TRUE.
-importFrom sp proj4string}
+\item{clean}{remove all coordinates for a cleaner layout, default to TRUE.}
+
+\item{size.label}{size of the label of the regions.}
+
+\item{add.adj}{logical indicator to add edges between connected regions.}
+
+\item{color.adj}{color of the adjacency matrix edges.}
+
+\item{alpha.adj}{alpha level (transparency) of the adjacency matrix edges.}
+
+\item{direction}{Direction of the color scheme. It can be either 1 (smaller values are darker) or -1 (higher values are darker). Default is set to 1.}
 }
 \description{
 This function visualizes the map with different variables. The input data frame can be either the long or wide format.
@@ -68,4 +78,7 @@ by.geo = "NAME_final", is.long = FALSE)
 
 }
 
+}
+\author{
+Zehang Richard Li
 }

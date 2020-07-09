@@ -59,8 +59,8 @@ second_diff <- diff(first_diff)
 qqnorm(second_diff)	
 abline(c(0,1))
 
-## Spacial-temporal random effects
-out <- rst(n=1, type = "st", type.t = "RW1", Amat = DemoMap$Amat, n.t = 50)
+## Spatial-temporal random effects
+out <- rst(n=1, type = "st", type.t = "RW2", Amat = DemoMap$Amat, n.t = 50)
 dimnames(out)
 par(mfrow = c(1,1))
 plot(1:dim(out)[3], out[1,1,], col = 1,
@@ -74,4 +74,7 @@ legend("bottomright", colnames(DemoMap$Amat), col = c(1:4), lty = rep(1,4))
 Rue, H., & Held, L. (2005). \emph{Gaussian Markov random fields: theory and applications}. CRC press.
 
 Sørbye, S. H. (2013). \emph{Tutorial: Scaling IGMRF-models in R-INLA}. Department of Mathematics and Statistics, University of Tromsø.
+}
+\author{
+Zehang Richard Li
 }

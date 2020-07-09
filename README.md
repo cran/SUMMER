@@ -1,30 +1,72 @@
 # SUMMER
+[![Build Status](https://travis-ci.com/richardli/SUMMER.svg?branch=master)](https://travis-ci.com/richardli/SUMMER) [![](https://cranlogs.r-pkg.org/badges/SUMMER)](https://cran.r-project.org/package=SUMMER) [![](https://cranlogs.r-pkg.org/badges/grand-total/SUMMER?color=orange)](https://cran.r-project.org/package=SUMMER)
+
 Spatio-temporal Under-five Mortality Models of Estimation in R
 
-[![Build Status](https://travis-ci.org/bryandmartin/SUMMER.svg?branch=master)](https://travis-ci.org/bryandmartin/SUMMER) [![](https://cranlogs.r-pkg.org/badges/SUMMER)](https://cran.r-project.org/package=SUMMER) [![](https://cranlogs.r-pkg.org/badges/grand-total/SUMMER?color=orange)](https://cran.r-project.org/package=SUMMER)
+## Major update (version 1.0.0)
+Version 1.0.0 contains many major updates from the previous versions:
++ Major updates to functions.
+    + ``fitGeneric`` is now ``smoothSurvey``
+    + ``fitINLA`` is now ``smoothDirect``
+    + ``fitINLA2`` is now ``smoothCluster``
+    + More extensions in both smoothed direct and cluster level models.
+    + Major changes to how temporal models are specified with `time.model` and `st.time.model`.
+    + More interpretable parameterization of slope and random slopes.
+    + More visualization options.
+    + Note: Previous function name and argument syntax remain to work as before, but may not receive high priority in maintenance in the future.  
++ Many minor improvements in functions.
+    + Better model summary message.
+    + Removed unnecessary function arguments, e.g., ``geo`` in various functions.
+    + Removed the requirement to repeated specifying ``Amat``, ``year_label`` and ``year_range``. Now they are only required in the model fitting stage.
++ New vignettes. 
 
 ## Major update (version 0.3.0)
-Version 0.3.0 contains some major updates from the previous versions. Some of the substantial change to existing functions are listed here. For a complete log of changes, see the [News](https://github.com/bryandmartin/SUMMER/blob/master/NEWS.md) section.
+Version 0.3.0 contains some major updates from the previous versions. Some of the substantial changes to existing functions are listed here. For a complete log of changes, see the [News](https://github.com/richardli/SUMMER/blob/master/NEWS.md) section.
 
-#### Function name changes
-The following functions have been renamed. Most of the function arguments remain the same:
++ Function name changes
+    * ``countrySummary`` is now ``getDirect``
+    * ``cuontrySummary_mult`` is now ``getDirectList``
+    * ``fitspace`` is now ``fitGeneric``
+    * ``projINLA`` is now ``getSmooth``
++ New functions
+    * ``getDiag``: produce diagnostic plots for the fitted model.
+    * ``getAdjusted``: produce adjusted estimates for a fitted model.
+    * ``getAmat``: automatic extract spatial adjacency matrix from the polygon file.
+    * ``hatchPlot``: plot variables on a map with hatching indicating the width of the credible interval.
++New methods
+    * ``fitINLA2``: implements new smoothing methods based on binomial models at cluster level. 
 
-+ ``countrySummary`` is now ``getDirect``
-+ ``cuontrySummary_mult`` is now ``getDirectList``
-+ ``fitspace`` is now ``fitGeneric``
-+ ``projINLA`` is now ``getSmooth``
+## Citation
 
-#### New functions
-The following new functions are added:
+To cite the SUMMER package in publications use
+```
+  @Manual{li2020space,
+    title = {Space-Time Smoothing of Demographic and Health Indicators using the R Package SUMMER},
+    author = {Zehang R Li and Bryan D Martin and Tracy Q Dong and Geir-Arne Fuglstad and Jessica Godwin and John Paige and Andrea Riebler and Samuel Clark and Jon Wakefield},
+    year = {2020},
+    journal = {arXiv preprint}
+  }
+```
 
-+ ``getDiag``: produce diagnostic plots for the fitted model.
-+ ``getAdjusted``: produce adjusted estimates for a fitted model
-+ ``getAmat``: automatic extract spatial adjacency matrix from the polygon file.
-+ ``hatchPlot``: plot variables on a map with hatching indicating the width of the credible interval.
-
-#### New methods
-``fitINLA2``: implements new smoothing methods based on binomial models at cluster level. 
-
+To cite specific version of the SUMMER package use
++ v1.0.0 
+```
+  @Manual{summer2020,
+    title = {SUMMER: Spatio-Temporal Under-Five Mortality Methods for Estimation},
+    author = {Zehang R Li and Bryan D Martin and Yuan Hsiao and Jessica Godwin and Jon Wakefield and Samuel J Clark and Geir-Arne Fuglstad and Andrea Riebler},
+    year = {2020},
+    note = {R package version 1.0.0},
+  }
+```
++ earlier versions (e.g., v0.3.0)
+```
+  @Manual{summer2019,
+    title = {SUMMER: Spatio-Temporal Under-Five Mortality Methods for Estimation},
+    author = {Bryan D Martin and Zehang R Li and Yuan Hsiao and Jessica Godwin and Jon Wakefield and Samuel J Clark and Geir-Arne Fuglstad and Andrea Riebler},
+    year = {2019},
+    note = {R package version 0.3.0},
+  }
+```
 
 
 ## Installation - CRAN
@@ -41,28 +83,12 @@ To download the development version of the SUMMER package, use the code below.
 
 ``` r
 # install.packages("devtools")
-devtools::install_github("bryandmartin/SUMMER")
+devtools::install_github("richardli/SUMMER")
 ```
  
-## Usage
-To see example usage of all main functions, build the package vignette. Note that the vignette will take a few minutes to compile.
-
-``` r
-# install.packages("devtools")
-devtools::install_github("bryandmartin/SUMMER", build_vignettes = TRUE)
-# Use this to view the vignette in the SUMMER HTML help
-help(package = "SUMMER", help_type = "html")
-# Use this to view the vignette as an isolated HTML file
-utils::browseVignettes(package = "SUMMER")
-```
+Examples of most of the main functions are described in the several vignettes listed on [https://cran.r-project.org/package=SUMMER](https://cran.r-project.org/package=SUMMER).
 
 ## Bug Reports / Change Requests
-If you encounter a bug or would like make a change request, please file it as an issue [here](https://github.com/bryandmartin/SUMMER/issues).
+If you encounter a bug or would like make a change request, please file it as an issue [here](https://github.com/richardli/SUMMER/issues).
 
-
-
-
-### Random notes for package authors:
-+ In order to use `devtools::check` to check the package with static vignettes, use the hidden option `devtools::check(clean_doc = FALSE)` to avoid deleting the inst/doc folder.
-+ Also for large PDF vignette, run `tools::compactPDF(gs_quality = "ebook", paths = "inst/doc/")` to please CRAN.
 

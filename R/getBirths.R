@@ -1,9 +1,9 @@
-#' Function to get Births file from DHS .dta files.
+#' Reformat full birth records into person-month format
 #' 
 #'
 #' @param filepath file path of raw .dta file from DHS. Only used when data frame is not provided in the function call.
 #' @param data data frame of a DHS survey
-#' @param surveyyear year of survey
+#' @param surveyyear year of survey. Since version 0.3.0, this argument does not truncate observations. The truncation of person-month is based on year.cut and min.last.period. 
 #' @param variables vector of variables to be used in obtaining the person-month files. The variables correspond the the DHS recode manual VI. For early DHS data, the variable names may need to be changed.
 #' @param strata vector of variable names used for strata. If a single variable is specified, then that variable will be used as strata indicator If multiple variables are specified, the interaction of these variables will be used as strata indicator. 
 #' @param dob variable name for the date of birth.
@@ -12,11 +12,15 @@
 #' @param date.interview variable name for the date of interview.
 #' @param month.cut the cutoff of each bins of age group in the unit of months. Default values are 1, 12, 24, 36, 48, and 60, representing the age groups (0, 1), [1, 12), [12, 24), ..., [48, 60).
 #' @param year.cut The cutoff of each bins of time periods, including both boundaries. Default values are 1980, 1985, ..., 2020, representing the time periods 80-84, 85-89, ..., 15-19. Notice that if each bin contains one year, the last year in the output is max(year.cut)-1. For example, if year.cut = 1980:2020, the last year in the output is 2019.
+#' @param min.last.period The cutoff for how many years the last period must contain in order to be counted in the output. For example, if the last period is 2015-2019 and min.last.period = 3, person-months for the last period will only be returned if survey contains observations at least in 2017. This argument avoids the situation that estimates for the last period being based on only a small number of initial years, if applicable. Default to be 0. 
 #' @param cmc.adjust number of months to add to the recorded month in the dataset. Some DHS surveys does not use Gregorian calendar (the calendar used in most of the world). For example, the Ethiopian calendar is 92 months behind the Gregorian calendar in general. Then we can set cmc.adjust to 92, which adds 92 months to all dates in the dataset, effectively transforming the Ethiopian calendar to the Gregorian calendar.  
 #' @param compact logical indicator of whether the compact format is returned. In the compact output, person months are aggregated by cluster, age, and time. Total number of person months and deaths in each group are returned instead of the raw person-months.
 #' @param compact.by vector of variables to summarize the compact form by. 
 #' 
 #' @return This function returns a new data frame where each row indicate a person-month, with the additional variables specified in the function argument.
+#' @author Zehang Richard Li, Bryan Martin, Laina Mercer
+#' @references Li, Z., Hsiao, Y., Godwin, J., Martin, B. D., Wakefield, J., Clark, S. J., & with support from the United Nations Inter-agency Group for Child Mortality Estimation and its technical advisory group. (2019). \emph{Changes in the spatial distribution of the under-five mortality rate: Small-area analysis of 122 DHS surveys in 262 subregions of 35 countries in Africa.} PloS one, 14(1), e0210645.
+#' @references Mercer, L. D., Wakefield, J., Pantazis, A., Lutambi, A. M., Masanja, H., & Clark, S. (2015). \emph{Space-time smoothing of complex survey data: small area estimation for child mortality.} The annals of applied statistics, 9(4), 1889.
 #' @examples 
 #' \dontrun{
 #' my_fp <- "/myExampleFilepath/surveyData.DTA"
@@ -24,7 +28,7 @@
 #' }
 #' 
 #' @export
-getBirths <- function(filepath = NULL, data = NULL, surveyyear = NA, variables = c("caseid", "v001", "v002", "v004", "v005", "v021", "v022", "v023", "v024", "v025", "v139", "bidx"), strata=c("v024", "v025"), dob = "b3", alive = "b5", age = "b7", date.interview= "v008", month.cut = c(1,12,24,36,48,60), year.cut=seq(1980, 2020, by=5), cmc.adjust = 0, compact = FALSE, compact.by = c('v001',"v024", "v025", "v005")) {
+getBirths <- function(filepath = NULL, data = NULL, surveyyear = NA, variables = c("caseid", "v001", "v002", "v004", "v005", "v021", "v022", "v023", "v024", "v025", "v139", "bidx"), strata=c("v024", "v025"), dob = "b3", alive = "b5", age = "b7", date.interview= "v008", month.cut = c(1,12,24,36,48,60), year.cut=seq(1980, 2020, by=5), min.last.period = 0, cmc.adjust = 0, compact = FALSE, compact.by = c('v001',"v024", "v025", "v005")) {
   if(is.null(data)){
       dat <- suppressWarnings(readstata13::read.dta13(filepath, generate.factors = TRUE))    
   }else{
@@ -66,6 +70,17 @@ getBirths <- function(filepath = NULL, data = NULL, surveyyear = NA, variables =
   test <- test[test$agemonth<max(month.cut), ]
   test <- test[test$year>=year.cut[1], ]
   test <- test[test$year<year.cut[length(year.cut)], ]
+  
+  # remove observations if last period has no more than min.last.period years.
+  # e.g., if last period 15-19, min.last.period = 3
+  #       determine if max year is at least 2017
+  if(min.last.period > 0){
+    # year.last.start <- year.cut[length(year.cut)-1] 
+    year.last.start <- max(year.cut[year.cut <= max(test$year)])
+    if(max(test$year) < year.last.start + min.last.period - 1){
+        test <- test[test$year < year.last.start, ]
+    }
+  }
   
   test$tstop <- NULL
   
@@ -111,8 +126,8 @@ getBirths <- function(filepath = NULL, data = NULL, surveyyear = NA, variables =
       year.cut3[year.cut3 >= 100] <- as.character(year.cut3[year.cut3 >= 100] - 100)
       year.cut3[as.numeric(year.cut3) < 10] <- paste0("0", year.cut3[as.numeric(year.cut3) < 10])
 
-      test$time <- paste(year.cut[1], year.cut[2] - 1, sep = "-")
-      year.bin <- paste(year.cut[1], year.cut[2] - 1, sep = "-")
+      test$time <- paste(year.cut2[1], year.cut3[2], sep = "-")
+      year.bin <- paste(year.cut2[1], year.cut3[2], sep = "-")
       for(i in 2:(length(year.cut)-1)){
         test$time[test$year >= year.cut[i] & test$year < year.cut[i+1]] <- paste(year.cut2[i], year.cut3[i+1], sep = "-")
         year.bin <- c(year.bin, paste(year.cut2[i], year.cut3[i+1], sep = "-"))
