@@ -4,11 +4,11 @@
 #'
 #' @param inla_mod output from \code{\link{smoothDirect}} or \code{\link{smoothCluster}}
 #' @param nsim number of simulations, only applicable for the cluster-level model.
-#' @param weight.strata a data frame with three columns, years, region, and proportion of each strata for the corresponding time period and region. This argument specifies the weights for strata-specific estimates on the probability scale. 
+#' @param weight.strata a data frame with two columns specifying time and region, followed by columns specifying proportion of each strata for each region. This argument specifies the weights for strata-specific estimates on the probability scale.
 #' @param weight.frame a data frame with three columns, years, region, and the weight of each frame for the corresponding time period and region. This argument specifies the weights for frame-specific estimates on the logit scale. Notice this is different from weight.strata argument. 
 #' @param verbose logical indicator whether to print progress messages from inla.posterior.sample.
 #' @param mc number of monte carlo draws to approximate the marginal prevalence/hazards for binomial model. If mc = 0, analytical approximation is used. The analytical approximation is invalid for hazard modeling with more than one age groups.
-#' @param include_time_unstruct  Indicator whether to include the temporal unstructured effects (i.e., shocks) in the smoothed estimates. Default is FALSE which excludes all unstructured temporal components. If set to TRUE all  the unstructured temporal random effects will be included. Alternatively, if this is specified as a vector of   subset of year labels (as in the year_label argument), only the unstructured terms in the corresponding time periods will be added to the prediction.
+#' @param include_time_unstruct  Indicator whether to include the temporal unstructured effects (i.e., shocks) in the smoothed estimates from cluster-level model. The argument only applies to the cluster-level models (from \code{\link{smoothCluster}}). Default is FALSE which excludes all unstructured temporal components. If set to TRUE all  the unstructured temporal random effects will be included. Alternatively, if this is specified as a vector of   subset of year labels (as in the year_label argument), only the unstructured terms in the corresponding time periods will be added to the prediction.
 #' @param include_subnational logical indicator whether to include the spatial and space-time interaction components in the smoothed estimates. If set to FALSE, only the main temporal trends are returned.
 #' @param CI Desired level of credible intervals
 #' @param draws Posterior samples drawn from the fitted model. This argument allows the previously sampled draws (by setting save.draws to be TRUE) be used in new aggregation tasks.  
@@ -277,18 +277,24 @@ getSmoothed <- function(inla_mod, nsim = 1000, weight.strata = NULL, weight.fram
           message(paste0("The IID temporal components are included in the following time periods: ", paste(year_label[which.include], collapse = ", ")))
         }
         slope <- grep("time.slope.group", fields)
-        if(!is.null(slope)){
+        slope0 <- grep("time.slope:1", fields)
+        if(length(slope) > 0){
            AA$tstar <- (AA$time.unstruct - (T + 1)/2) / (T + 1)
            AA$slope  <- match(paste0("time.slope.group", AA$age.rep.idx, ":1"), fields)
+        }else if(length(slope0) > 0){
+           AA$tstar <- (AA$time.unstruct - (T + 1)/2) / (T + 1)
+           AA$slope  <- match(paste0("time.slope:1"), fields)
         }else{
-          AA$tstar <-  AA$slope <- NA
+          AA$tstar <- NA
+          AA$slope <- "time.slope:NA"
         }
         st.slope <- grep("st.slope.id", fields)
-        if(!is.null(st.slope)){
+        if(length(st.slope)>0){
            AA$ststar <- (AA$time.unstruct - (T + 1)/2) / (T + 1)
            AA$st.slope  <- match(paste0("st.slope.id:", AA$region.struct), fields)
         }else{
-           AA$ststar <-  AA$st.slope <- NA
+           AA$ststar <-  NA
+           AA$st.slope <- "st.slope.id:NA"
         }
         AA.loc$age.idx <- AA.loc$age.rep.idx <- NA
 

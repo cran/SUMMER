@@ -3,12 +3,13 @@
 #'
 #' @param filepath file path of raw .dta file from DHS. Only used when data frame is not provided in the function call.
 #' @param data data frame of a DHS survey
-#' @param surveyyear year of survey. Since version 0.3.0, this argument does not truncate observations. The truncation of person-month is based on year.cut and min.last.period. 
+#' @param surveyyear year of survey. Observations after this year will be excluded from the analysis.
 #' @param variables vector of variables to be used in obtaining the person-month files. The variables correspond the the DHS recode manual VI. For early DHS data, the variable names may need to be changed.
 #' @param strata vector of variable names used for strata. If a single variable is specified, then that variable will be used as strata indicator If multiple variables are specified, the interaction of these variables will be used as strata indicator. 
 #' @param dob variable name for the date of birth.
 #' @param alive variable name for the indicator of whether child was alive or dead at the time of interview.
 #' @param age variable name for the age at death of the child in completed months.
+#' @param age.truncate the smallest age in months where only full years are reported. The default value is 24, which corresponds to the DHS practice of recording only age in full years for children over 2 years old. That is, for children with age starting from 24 months old, we assume the age variable reported in multiples of 12 are truncated from its true value. For example, children between age 24 to 35 months are all recorded as 24. To account for the truncation of age, 5 months are added to all ages recorded in multiples of 12 starting from 24. To avoid this adjustment, set this argument to NA. 
 #' @param date.interview variable name for the date of interview.
 #' @param month.cut the cutoff of each bins of age group in the unit of months. Default values are 1, 12, 24, 36, 48, and 60, representing the age groups (0, 1), [1, 12), [12, 24), ..., [48, 60).
 #' @param year.cut The cutoff of each bins of time periods, including both boundaries. Default values are 1980, 1985, ..., 2020, representing the time periods 80-84, 85-89, ..., 15-19. Notice that if each bin contains one year, the last year in the output is max(year.cut)-1. For example, if year.cut = 1980:2020, the last year in the output is 2019.
@@ -28,7 +29,7 @@
 #' }
 #' 
 #' @export
-getBirths <- function(filepath = NULL, data = NULL, surveyyear = NA, variables = c("caseid", "v001", "v002", "v004", "v005", "v021", "v022", "v023", "v024", "v025", "v139", "bidx"), strata=c("v024", "v025"), dob = "b3", alive = "b5", age = "b7", date.interview= "v008", month.cut = c(1,12,24,36,48,60), year.cut=seq(1980, 2020, by=5), min.last.period = 0, cmc.adjust = 0, compact = FALSE, compact.by = c('v001',"v024", "v025", "v005")) {
+getBirths <- function(filepath = NULL, data = NULL, surveyyear = NA, variables = c("caseid", "v001", "v002", "v004", "v005", "v021", "v022", "v023", "v024", "v025", "v139", "bidx"), strata=c("v024", "v025"), dob = "b3", alive = "b5", age = "b7", age.truncate = 24, date.interview= "v008", month.cut = c(1,12,24,36,48,60), year.cut=seq(1980, 2020, by=5), min.last.period = 0, cmc.adjust = 0, compact = FALSE, compact.by = c('v001',"v024", "v025", "v005")) {
   if(is.null(data)){
       dat <- suppressWarnings(readstata13::read.dta13(filepath, generate.factors = TRUE))    
   }else{
@@ -39,6 +40,20 @@ getBirths <- function(filepath = NULL, data = NULL, surveyyear = NA, variables =
   surveyyear <- surveyyear - 1900
   year.cut <- year.cut - 1900
   variables <- union(variables, strata)
+  
+  # use mid point to impute age reported in years
+  if(!is.na(age.truncate)){
+      trunc <- intersect(which(dat[, age] %% 12 == 0), which(dat[, age] >= age.truncate))
+      if(length(trunc) > 0){
+          dat[trunc, age] <- dat[trunc, age] + 5
+          message(paste0("Children with age at least ", age.truncate, " months are assumed to have recorded age truncated to full years. \nRecorded age + 5 months is used to adjust for the truncation for ages >= ", age.truncate , " and are multiples of 12." ))
+      }else{
+          message(paste0("Children with age at least ", age.truncate, " months are specified to have recorded age truncated to full years. But no records in the data needs the adjustment." ))
+      }
+  }else{
+    message("No age truncation adjustment is performed.")
+  }
+
   datnew <- dat[, variables] 
   dat[, alive] <- tolower(dat[, alive])
   
@@ -58,9 +73,20 @@ getBirths <- function(filepath = NULL, data = NULL, surveyyear = NA, variables =
   formula <- as.formula(paste(c("Surv(time = obsStart, time2=obsStop, event = died, origin=dob)~dob+survey_year+died+id.new", union(variables, strata)),  collapse = "+"))
 
   Surv <- survival::Surv
+  # test <- survival::survSplit(formula,
+  #                             data = datnew, cut = c(0:max(month.cut)), 
+  #                             start = "agemonth", end = "tstop", event = "died")
+
   test <- survival::survSplit(formula,
-                              data = datnew, cut = c(0:max(month.cut)), 
+                              data = datnew, cut = c(0.02, 1:max(month.cut)),
                               start = "agemonth", end = "tstop", event = "died")
+  # the survival package splits the data into
+  # (0, 0.02], (0.02, 1], (1, 2], ..., (59, 60], ...
+  # which is equivalent to 
+  # [0, 1),     [1, 2),    [2, 3),..., [60, 61), ...
+  test$agemonth <- test$agemonth + 1
+  test$agemonth[test$agemonth == 1] <- 0   
+  test$agemonth[test$agemonth == 1.02] <- 1   
 
   test$obsStart <- test$dob + test$agemonth
   test$obsStop <- test$dob + test$tstop
@@ -70,6 +96,7 @@ getBirths <- function(filepath = NULL, data = NULL, surveyyear = NA, variables =
   test <- test[test$agemonth<max(month.cut), ]
   test <- test[test$year>=year.cut[1], ]
   test <- test[test$year<year.cut[length(year.cut)], ]
+  if(!is.na(surveyyear)) test <- test[test$year<= surveyyear, ]
   
   # remove observations if last period has no more than min.last.period years.
   # e.g., if last period 15-19, min.last.period = 3
@@ -108,8 +135,9 @@ getBirths <- function(filepath = NULL, data = NULL, surveyyear = NA, variables =
   # test$ageGrp12 <- factor(test$ageGrp12)
   # levels(test$ageGrp12) <- c("0-11", "12-23", "24-35", "36-47", "48-59")
   
-  test$age <- factor(test$age)
-  levels(test$age) <- bins #c("0","1-11","12-23","24-35","36-47","48-59")
+  # test$age <- factor(test$age)
+  # levels(test$age) <- bins #c("0","1-11","12-23","24-35","36-47","48-59")
+  test$age <- factor(as.character(test$age), levels = as.character(bins))
   
   if(period.1yr){
       test$time <- year.cut[1] + 1900 
@@ -128,9 +156,11 @@ getBirths <- function(filepath = NULL, data = NULL, surveyyear = NA, variables =
 
       test$time <- paste(year.cut2[1], year.cut3[2], sep = "-")
       year.bin <- paste(year.cut2[1], year.cut3[2], sep = "-")
-      for(i in 2:(length(year.cut)-1)){
-        test$time[test$year >= year.cut[i] & test$year < year.cut[i+1]] <- paste(year.cut2[i], year.cut3[i+1], sep = "-")
-        year.bin <- c(year.bin, paste(year.cut2[i], year.cut3[i+1], sep = "-"))
+      if(length(year.cut) > 2){
+        for(i in 2:(length(year.cut)-1)){
+          test$time[test$year >= year.cut[i] & test$year < year.cut[i+1]] <- paste(year.cut2[i], year.cut3[i+1], sep = "-")
+          year.bin <- c(year.bin, paste(year.cut2[i], year.cut3[i+1], sep = "-"))
+        }        
       }
   }
 
