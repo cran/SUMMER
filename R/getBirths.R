@@ -142,9 +142,11 @@ getBirths <- function(filepath = NULL, data = NULL, surveyyear = NA, variables =
   if(period.1yr){
       test$time <- year.cut[1] + 1900 
       year.bin <-  year.cut[1] + 1900
-      for(i in 2:(length(year.cut)-1)){
-        test$time[test$year >= year.cut[i] & test$year < year.cut[i+1]] <- year.cut[i] + 1900
-        year.bin <- c(year.bin, year.cut[i] + 1900)
+      if(length(year.cut) > 2){
+        for(i in 2:(length(year.cut)-1)){
+          test$time[test$year >= year.cut[i] & test$year < year.cut[i+1]] <- year.cut[i] + 1900
+          year.bin <- c(year.bin, year.cut[i] + 1900)
+        }        
       }
   }else{
       year.cut2 <- year.cut
@@ -181,7 +183,7 @@ getBirths <- function(filepath = NULL, data = NULL, surveyyear = NA, variables =
       test.comp <- test[, c(compact.by, "age", "strata", "time", "died")]
       test.comp$total <- 1
       formula <- as.formula(paste0(".~age + time + strata + ", paste(compact.by, collapse = " + ")))
-      test.comp <- aggregate(formula, data = test.comp, FUN = sum, drop = TRUE)
+      test.comp <- stats::aggregate(formula, data = test.comp, FUN = sum, drop = TRUE)
      test <- test.comp
   }
 

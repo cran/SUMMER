@@ -1,13 +1,15 @@
 Package: SUMMER
 Type: Package
-Title: Spatio-Temporal Under-Five Mortality Methods for Estimation
-Version: 1.1.0
-Date: 2021-01-31
+Title: Small-Area-Estimation Unit/Area Models and Methods for
+        Estimation in R
+Version: 1.2.0
+Date: 2021-07-05
 Authors@R: c(
     person(given = "Zehang R", family = "Li", email= "lizehang@gmail.com", role = c("cre","aut")),
     person(given = "Bryan D", family = "Martin", email= "bmartin6@uw.edu", role = "aut"), 
     person(given = "Yuan", family = "Hsiao", email = "yahsiao@uw.edu", role = "aut"),
     person(given = "Jessica", family = "Godwin", email = "jlg0003@uw.edu", role = "aut"),
+    person(given = "John", family = "Paige", email = "paigejo@gmail.com", role = "aut"),
     person(given = "Jon", family = "Wakefield", email = "jonno@uw.edu", role = "aut"),
     person(given = "Samuel J", family = "Clark", email = "work@samclark.net", role = "aut"),
     person(given = "Geir-Arne", family = "Fuglstad", email = "geir-arne.fuglstad@ntnu.no", role = "aut"),
@@ -25,18 +27,20 @@ Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.1.1
 Additional_repositories: https://inla.r-inla-download.org/R/testing/
-Suggests: INLA, knitr, rmarkdown, readstata13, patchwork, rdhs, R.rsp
+Suggests: INLA, knitr, rmarkdown, readstata13, patchwork, rdhs, R.rsp,
+        fields
 VignetteBuilder: R.rsp, knitr
 NeedsCompilation: no
-Packaged: 2021-02-01 18:50:55 UTC; zehangli
+Packaged: 2021-07-05 18:58:27 UTC; zehangli
 Author: Zehang R Li [cre, aut],
   Bryan D Martin [aut],
   Yuan Hsiao [aut],
   Jessica Godwin [aut],
+  John Paige [aut],
   Jon Wakefield [aut],
   Samuel J Clark [aut],
   Geir-Arne Fuglstad [aut],
   Andrea Riebler [aut]
 Maintainer: Zehang R Li <lizehang@gmail.com>
 Repository: CRAN
-Date/Publication: 2021-02-02 01:10:15 UTC
+Date/Publication: 2021-07-06 08:10:05 UTC
