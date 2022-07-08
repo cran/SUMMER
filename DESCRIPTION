@@ -2,14 +2,15 @@ Package: SUMMER
 Type: Package
 Title: Small-Area-Estimation Unit/Area Models and Methods for
         Estimation in R
-Version: 1.2.1
-Date: 2022-02-12
+Version: 1.3.0
+Date: 2022-06-24
 Authors@R: c(
     person(given = "Zehang R", family = "Li", email= "lizehang@gmail.com", role = c("cre","aut")),
     person(given = "Bryan D", family = "Martin", email= "bmartin6@uw.edu", role = "aut"), 
     person(given = "Yuan", family = "Hsiao", email = "yahsiao@uw.edu", role = "aut"),
     person(given = "Jessica", family = "Godwin", email = "jlg0003@uw.edu", role = "aut"),
     person(given = "John", family = "Paige", email = "paigejo@gmail.com", role = "aut"),
+    person(given = "Peter", family = "Gao", email = "petergao@uw.edu", role = "aut"),
     person(given = "Jon", family = "Wakefield", email = "jonno@uw.edu", role = "aut"),
     person(given = "Samuel J", family = "Clark", email = "work@samclark.net", role = "aut"),
     person(given = "Geir-Arne", family = "Fuglstad", email = "geir-arne.fuglstad@ntnu.no", role = "aut"),
@@ -25,23 +26,24 @@ Imports: survey, stats, spdep, survival, ggplot2, scales, utils,
         data.table, RColorBrewer, grDevices
 Encoding: UTF-8
 LazyData: true
-RoxygenNote: 7.1.2
+RoxygenNote: 7.2.0
 Additional_repositories: https://inla.r-inla-download.org/R/testing/
 Suggests: INLA, knitr, rmarkdown, readstata13, patchwork, rdhs, R.rsp,
-        fields
+        fields, sae, dplyr, tidyr
 VignetteBuilder: R.rsp, knitr
 NeedsCompilation: no
 Config/build/clean-inst-doc: FALSE
-Packaged: 2022-02-13 22:56:49 UTC; zehangli
+Packaged: 2022-07-07 23:59:10 UTC; zehangli
 Author: Zehang R Li [cre, aut],
   Bryan D Martin [aut],
   Yuan Hsiao [aut],
   Jessica Godwin [aut],
   John Paige [aut],
+  Peter Gao [aut],
   Jon Wakefield [aut],
   Samuel J Clark [aut],
   Geir-Arne Fuglstad [aut],
   Andrea Riebler [aut]
 Maintainer: Zehang R Li <lizehang@gmail.com>
 Repository: CRAN
-Date/Publication: 2022-02-14 08:00:09 UTC
+Date/Publication: 2022-07-08 08:50:06 UTC
