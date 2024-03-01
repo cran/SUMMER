@@ -27,8 +27,9 @@ smoothDirect(
   pc.st.u = NA,
   pc.st.alpha = NA,
   control.compute = list(dic = TRUE, mlik = TRUE, cpo = TRUE, openmp.strategy =
-    "default"),
+    "default", config = TRUE),
   control.inla = list(strategy = "adaptive", int.strategy = "auto"),
+  control.fixed = list(),
   verbose = FALSE,
   geo = NULL,
   rw = NULL,
@@ -58,8 +59,9 @@ fitINLA(
   pc.st.u = NA,
   pc.st.alpha = NA,
   control.compute = list(dic = TRUE, mlik = TRUE, cpo = TRUE, openmp.strategy =
-    "default"),
+    "default", config = TRUE),
   control.inla = list(strategy = "adaptive", int.strategy = "auto"),
+  control.fixed = list(),
   verbose = FALSE,
   geo = NULL,
   rw = NULL,
@@ -76,7 +78,7 @@ fitINLA(
 
 \item{time.model}{Model for the main temporal trend, can be rw1, rw2, or ar1. ar1 is not implemented for yearly model with period data input. Default to be rw2. For ar1 main effect, a linear slope is also added with time scaled to be between -0.5 to 0.5, i.e., the slope coefficient represents the total change between the first year and the last year in the projection period on the logit scale.}
 
-\item{st.time.model}{Temporal component model for the interaction term, can be rw1, rw2, or ar1. ar1 is not implemented for yearly model with period data input. Default to be the same as time.model unless specified otherwise. For ar1 interaction model, region-specific random slopes can be added by specifying \code{pc.st.slope.u} and \code{pc.st.slope.alpha}.}
+\item{st.time.model}{Temporal component model for the interaction term, can be rw1, rw2, or ar1. ar1 is not implemented for yearly model with period data input. Default to be the same as time.model unless specified otherwise. For ar1 interaction model, region-specific random slopes are currently not implemented.}
 
 \item{year_label}{string vector of year names}
 
@@ -108,9 +110,11 @@ fitINLA(
 
 \item{pc.st.alpha}{hyperparameter alpha for the PC prior on precisions for the interaction term.}
 
-\item{control.compute}{list of options to be passed to control.compute() in the inla() function.}
+\item{control.compute}{list of options to be passed to control.compute() in the inla() function. The default argument saves the internal objects created by INLA for posterior sampling later. If the fitted object is too large in size and there is no need to perform joint posterior sampling from the model (only used in benchmarking), this argument can be set to \code{control.compute = list(config = FALSE)} to reduce the size of the fitted object.}
 
 \item{control.inla}{list of options to be passed to control.inla() in the inla() function. Default to the "adaptive" integration strategy.}
+
+\item{control.fixed}{list of options to be passed to control.fixed() in the inla() function.}
 
 \item{verbose}{logical indicator to print out detailed inla() intermediate steps.}
 
@@ -141,21 +145,20 @@ The function \code{smoothDirect} replaces the previous function name \code{fitIN
   years.all <- c(years, "15-19")
   fit1 <- smoothDirect(data = data, Amat = NULL, 
   year_label = years.all, year_range = c(1985, 2019), 
-  time.model = 'rw2', is.yearly=FALSE, m = 5, control.compute = list(config =TRUE))
+  time.model = 'rw2', m = 5, control.compute = list(config =TRUE))
   out1 <- getSmoothed(fit1)
   plot(out1)
   
   #  subnational model
   fit2 <- smoothDirect(data = data, Amat = DemoMap$Amat, 
   year_label = years.all, year_range = c(1985, 2019), 
-  time.model = 'rw2',is.yearly=TRUE, m = 5, type.st = 4)
+  time.model = 'rw2', m = 5, type.st = 4)
   out2 <- getSmoothed(fit2)
   plot(out2)
   
   #  subnational space-only model for one period
   fit3 <- smoothDirect(data = subset(data, years == "10-14"), 
            time.model = NULL, Amat = DemoMap$Amat)
-  source('projINLA.R')
   out3 <- getSmoothed(fit3)
   plot(out3, plot.CI = TRUE)
 }

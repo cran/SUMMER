@@ -11,7 +11,7 @@ smoothCluster(
   family = c("betabinomial", "binomial")[1],
   age.groups = c("0", "1-11", "12-23", "24-35", "36-47", "48-59"),
   age.n = c(1, 11, 12, 12, 12, 12),
-  age.rw.group = c(1, 2, 3, 3, 3, 3),
+  age.time.group = c(1, 2, 3, 3, 3, 3),
   age.strata.fixed.group = c(1, 2, 3, 4, 5, 6),
   time.model = c("rw1", "rw2", "ar1")[2],
   st.time.model = NULL,
@@ -40,11 +40,13 @@ smoothCluster(
   overdisp.prec = 0.4,
   options = list(config = TRUE),
   control.inla = list(strategy = "adaptive", int.strategy = "auto"),
+  control.fixed = list(),
   verbose = FALSE,
   geo = NULL,
   rw = NULL,
   ar = NULL,
   st.rw = NULL,
+  age.rw.group = NULL,
   ...
 )
 
@@ -54,7 +56,7 @@ fitINLA2(
   family = c("betabinomial", "binomial")[1],
   age.groups = c("0", "1-11", "12-23", "24-35", "36-47", "48-59"),
   age.n = c(1, 11, 12, 12, 12, 12),
-  age.rw.group = c(1, 2, 3, 3, 3, 3),
+  age.time.group = c(1, 2, 3, 3, 3, 3),
   age.strata.fixed.group = c(1, 2, 3, 4, 5, 6),
   time.model = c("rw1", "rw2", "ar1")[2],
   st.time.model = NULL,
@@ -83,11 +85,13 @@ fitINLA2(
   overdisp.prec = 0.4,
   options = list(config = TRUE),
   control.inla = list(strategy = "adaptive", int.strategy = "auto"),
+  control.fixed = list(),
   verbose = FALSE,
   geo = NULL,
   rw = NULL,
   ar = NULL,
   st.rw = NULL,
+  age.rw.group = NULL,
   ...
 )
 }
@@ -111,11 +115,11 @@ fitINLA2(
 
 \item{age.n}{number of months in each age groups in the same order.}
 
-\item{age.rw.group}{vector indicating grouping of the ages groups. For example, if each age group is assigned a different random walk component, then set age.rw.group to c(1:length(age.groups)); if all age groups share the same random walk component, then set age.rw.group to a rep(1, length(age.groups)). The default for 6 age groups is c(1,2,3,3,3,3), which assigns a separate random walk to the first two groups and a common random walk for the rest of the age groups. The vector should contain values starting from 1.}
+\item{age.time.group}{vector indicating grouping of the ages groups in the temporal model. For example, if each age group is assigned a different temporal component, then set age.rw.group to c(1:length(age.groups)); if all age groups share the same random walk component, then set age.rw.group to a rep(1, length(age.groups)). The default for 6 age groups is c(1,2,3,3,3,3), which assigns a separate temporal trend to the first two groups and a common random walk for the rest of the age groups. The vector should contain values starting from 1. This argument replaces the previous \code{age.rw.group} argument.}
 
-\item{age.strata.fixed.group}{vector indicating grouping of the ages groups for different strata. The default is c(1:length(age.groups)), which correspond to each age group within each stratum receives a separate intercept. If several age groups are specified to be the same value in this vector, the stratum specific deviation from the baseline is assumed to be the same for these age groups. For example, if \code{age.strata.fixed.group = c(1, 2, 3, 3, 3, 3)}, then the fixed effect part of the linear predictor consists of 6 overall age-specific intercepts and 3 set of strata effects (where a base stratum is chosen internally), for age groups 1, 2, and the rest respectively.
+\item{age.strata.fixed.group}{vector indicating grouping of the ages groups for different strata in the intercept. The default is c(1:length(age.groups)), which correspond to each age group within each stratum receives a separate intercept. If several age groups are specified to be the same value in this vector, the stratum specific deviation from the baseline is assumed to be the same for these age groups. For example, if \code{age.strata.fixed.group = c(1, 2, 3, 3, 3, 3)}, then the intercept part of the linear predictor consists of 6 overall age-specific intercepts and 3 set of strata effects (where a base stratum is chosen internally), for age groups 1, 2, and the rest respectively. Notice that this argument does not control the linear temporal trends (which is also parameterized as fixed effect, but determined by the \code{age.rw.group} argument). The vector should contain values starting from 1.
 
-For example, if each age group is assigned a different intercept, then set age.strata.fixed.group to c(1:length(age.groups)); if all age groups share the same intercept, then set age.strata.fixed.group to a rep(1, length(age.groups)). The default for 6 age groups is the former. It can also be set to be the same as \code{age.rw.group}. The vector should contain values starting from 1.}
+More specific examples: (1) if each age group is assigned a different intercept, then set age.strata.fixed.group to c(1:length(age.groups)) (2) if all age groups share the same intercept, then set age.strata.fixed.group to a rep(1, length(age.groups)). The default for 6 age groups is the former. (3) If each temporal trend is associated with its own intercept, set it to be the same as \code{age.rw.group}.}
 
 \item{time.model}{Model for the main temporal trend, can be rw1, rw2, ar1, or NULL (for spatial-only smoothing). Default to be rw2. For ar1 main effect, a linear slope is also added with time scaled to be between -0.5 to 0.5, i.e., the slope coefficient represents the total change between the first year and the last year in the projection period on the logit scale.}
 
@@ -137,7 +141,7 @@ For example, if each age group is assigned a different intercept, then set age.s
 
 \item{linear.trend}{logical indicator whether a linear trend is added to the temporal main effect. If the temporal main effect is RW2, then it will be forced to FALSE. Default is TRUE.}
 
-\item{common.trend}{logical indicator whether all age groups and/or strata share the same linear trend in the temporal main effect.}
+\item{common.trend}{logical indicator whether all age groups and strata share the same linear trend in the temporal main effect.}
 
 \item{strata.time.effect}{logical indicator whether to include strata specific temporal trends.}
 
@@ -171,6 +175,8 @@ For example, if each age group is assigned a different intercept, then set age.s
 
 \item{control.inla}{list of options to be passed to control.inla() in the inla() function. Default to the "adaptive" integration strategy.}
 
+\item{control.fixed}{list of options to be passed to control.fixed() in the inla() function.}
+
 \item{verbose}{logical indicator to print out detailed inla() intermediate steps.}
 
 \item{geo}{Deprecated. Spatial polygon file, legacy parameter from previous versions of the package.}
@@ -180,6 +186,8 @@ For example, if each age group is assigned a different intercept, then set age.s
 \item{ar}{Deprecated. Order of the autoregressive component. If ar is specified to be positive integer, the random walk components will be replaced by AR(p) terms in the interaction part. The main temporal trend remains to be random walk of order rw unless rw = 0.}
 
 \item{st.rw}{Deprecated. Take values 1 or 2, indicating the order of random walk for the interaction term. If not specified, it will take the same order as the argument rw in the main effect. Notice that this argument is only used if ar is set to 0.}
+
+\item{age.rw.group}{Deprecated. Legacy parameter replaced by \code{age.time.group}.}
 
 \item{...}{arguments to be passed to the inla() function call.}
 }

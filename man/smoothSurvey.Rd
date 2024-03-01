@@ -9,6 +9,7 @@ smoothSurvey(
   data,
   geo = NULL,
   Amat = NULL,
+  region.list = NULL,
   X = NULL,
   X.unit = NULL,
   responseType = c("binary", "gaussian")[1],
@@ -36,6 +37,7 @@ smoothSurvey(
   weight.strata = NULL,
   nsim = 1000,
   save.draws = FALSE,
+  smooth = TRUE,
   ...
 )
 
@@ -43,6 +45,7 @@ fitGeneric(
   data,
   geo = NULL,
   Amat = NULL,
+  region.list = NULL,
   X = NULL,
   X.unit = NULL,
   responseType = c("binary", "gaussian")[1],
@@ -70,6 +73,7 @@ fitGeneric(
   weight.strata = NULL,
   nsim = 1000,
   save.draws = FALSE,
+  smooth = TRUE,
   ...
 )
 }
@@ -84,6 +88,8 @@ fitGeneric(
 \item{geo}{Deprecated argument from early versions.}
 
 \item{Amat}{Adjacency matrix for the regions. If set to NULL, the IID spatial effect will be used.}
+
+\item{region.list}{a vector of region names. Only used when IID model is used and the adjacency matrix not specified. This allows the output to include regions with no sample in the data. When the spatial adjacency matrix is specified, the column names of the adjacency matrix will be used to determine region.list. If set to NULL, all regions in the data are used.}
 
 \item{X}{Areal covariates data frame. One of the column name needs to match the \code{regionVar} specified in the function call, in order to be linked to the data input. Currently only supporting time-invariant region-level covariates.}
 
@@ -139,6 +145,8 @@ fitGeneric(
 
 \item{save.draws}{logical indicator of whether to save the full posterior draws.}
 
+\item{smooth}{logical indicator of whether to perform smoothing. If set to FALSE, a data frame of direct estimate is returned. Only used when \code{is.unit.level} is FALSE.}
+
 \item{...}{additional arguments passed to \code{svydesign} function.}
 }
 \value{
@@ -172,6 +180,13 @@ weightVar="weights", regionVar="region",
 clusterVar = "~clustid+id", CI = 0.95)
 summary(fit0)
 
+# if only direct estimates without smoothing is of interest
+fit0.dir <- smoothSurvey(data=DemoData2,  
+Amat=DemoMap2$Amat, responseType="binary", 
+responseVar="tobacco.use", strataVar="strata", 
+weightVar="weights", regionVar="region", 
+clusterVar = "~clustid+id", CI = 0.95, smooth = FALSE)
+
 # posterior draws can be returned with save.draws = TRUE
 fit0.draws <- smoothSurvey(data=DemoData2,  
 Amat=DemoMap2$Amat, responseType="binary", 
@@ -195,7 +210,7 @@ direct <- fit0$HT[, c("region", "HT.est", "HT.var")]
 fit2 <- smoothSurvey(data=NULL, direct.est = direct, 
                     Amat=DemoMap2$Amat, regionVar="region",
                     responseVar="HT.est", direct.est.var = "HT.var", 
-                    responseType = "binary")
+                    responseType = "gaussian")
 # Check it is the same as fit0
 plot(fit2$smooth$mean, fit0$smooth$mean)
 
@@ -216,6 +231,25 @@ fit4 <- smoothSurvey(data=DemoData2, responseType="binary",
        responseVar="tobacco.use", strataVar="strata", 
        weightVar="weights", regionVar="region", 
        clusterVar = "~clustid+id", CI = 0.95)
+
+# Example with missing regions in the raw input
+DemoData2.sub <- subset(DemoData2, region != "central")
+fit.without.central <- smoothSurvey(data=DemoData2.sub,  
+                         Amat=NULL, responseType="binary", 
+                         responseVar="tobacco.use", strataVar="strata", 
+                         weightVar="weights", regionVar="region", 
+                         clusterVar = "~clustid+id", CI = 0.95)
+fit.without.central$HT
+fit.without.central$smooth
+
+fit.without.central <- smoothSurvey(data=DemoData2.sub,  
+                         Amat=NULL, region.list = unique(DemoData2$region),
+                         responseType="binary", 
+                         responseVar="tobacco.use", strataVar="strata", 
+                         weightVar="weights", regionVar="region", 
+                         clusterVar = "~clustid+id", CI = 0.95)
+fit.with.central$HT
+fit.with.central$smooth
 
 # Using the formula argument, further customizations can be added to the 
 #  model fitted. For example, we can fit the Fay-Harriot model with 

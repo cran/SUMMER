@@ -6,7 +6,7 @@
 #' @param Amat Adjacency matrix for the regions
 #' @param formula INLA formula. See vignette for example of using customized formula.
 #' @param time.model Model for the main temporal trend, can be rw1, rw2, or ar1. ar1 is not implemented for yearly model with period data input. Default to be rw2. For ar1 main effect, a linear slope is also added with time scaled to be between -0.5 to 0.5, i.e., the slope coefficient represents the total change between the first year and the last year in the projection period on the logit scale. 
-#' @param st.time.model Temporal component model for the interaction term, can be rw1, rw2, or ar1. ar1 is not implemented for yearly model with period data input. Default to be the same as time.model unless specified otherwise. For ar1 interaction model, region-specific random slopes can be added by specifying \code{pc.st.slope.u} and \code{pc.st.slope.alpha}.
+#' @param st.time.model Temporal component model for the interaction term, can be rw1, rw2, or ar1. ar1 is not implemented for yearly model with period data input. Default to be the same as time.model unless specified otherwise. For ar1 interaction model, region-specific random slopes are currently not implemented.
 #' @param year_label string vector of year names
 #' @param year_range Entire range of the years (inclusive) defined in year_label.
 #' @param is.yearly Logical indicator for fitting yearly or period model.
@@ -22,8 +22,9 @@
 #' @param pc.alpha.cor hyperparameter alpha for the PC prior on the autocorrelation parameter in the AR prior.
 #' @param pc.st.u hyperparameter U for the PC prior on precisions for the interaction term.
 #' @param pc.st.alpha hyperparameter alpha for the PC prior on precisions for the interaction term.
-#' @param control.compute list of options to be passed to control.compute() in the inla() function.
+#' @param control.compute list of options to be passed to control.compute() in the inla() function. The default argument saves the internal objects created by INLA for posterior sampling later. If the fitted object is too large in size and there is no need to perform joint posterior sampling from the model (only used in benchmarking), this argument can be set to \code{control.compute = list(config = FALSE)} to reduce the size of the fitted object.
 #' @param control.inla list of options to be passed to control.inla() in the inla() function. Default to the "adaptive" integration strategy.
+#' @param control.fixed list of options to be passed to control.fixed() in the inla() function.  
 #' @param verbose logical indicator to print out detailed inla() intermediate steps.
 #' @param geo Deprecated.
 #' @param rw Deprecated.
@@ -50,26 +51,25 @@
 #'   years.all <- c(years, "15-19")
 #'   fit1 <- smoothDirect(data = data, Amat = NULL, 
 #'   year_label = years.all, year_range = c(1985, 2019), 
-#'   time.model = 'rw2', is.yearly=FALSE, m = 5, control.compute = list(config =TRUE))
+#'   time.model = 'rw2', m = 5, control.compute = list(config =TRUE))
 #'   out1 <- getSmoothed(fit1)
 #'   plot(out1)
 #'   
 #'   #  subnational model
 #'   fit2 <- smoothDirect(data = data, Amat = DemoMap$Amat, 
 #'   year_label = years.all, year_range = c(1985, 2019), 
-#'   time.model = 'rw2',is.yearly=TRUE, m = 5, type.st = 4)
+#'   time.model = 'rw2', m = 5, type.st = 4)
 #'   out2 <- getSmoothed(fit2)
 #'   plot(out2)
 #'   
 #'   #  subnational space-only model for one period
 #'   fit3 <- smoothDirect(data = subset(data, years == "10-14"), 
 #'            time.model = NULL, Amat = DemoMap$Amat)
-#'   source('projINLA.R')
 #'   out3 <- getSmoothed(fit3)
 #'   plot(out3, plot.CI = TRUE)
 #' }
 #' @export
-smoothDirect <- function(data, Amat, formula = NULL, time.model = c("rw1", "rw2", "ar1")[2], st.time.model = NULL, year_label, year_range = c(1980, 2014), is.yearly=TRUE, m = 5, type.st = 1, survey.effect = FALSE, hyper = c("pc", "gamma")[1], pc.u = 1, pc.alpha = 0.01, pc.u.phi = 0.5, pc.alpha.phi = 2/3, pc.u.cor = 0.7, pc.alpha.cor = 0.9, pc.st.u = NA, pc.st.alpha = NA, control.compute = list(dic = TRUE, mlik = TRUE, cpo = TRUE, openmp.strategy = 'default'), control.inla = list(strategy = "adaptive", int.strategy = "auto"), verbose = FALSE, geo = NULL, rw = NULL, ar = NULL, options = NULL){
+smoothDirect <- function(data, Amat, formula = NULL, time.model = c("rw1", "rw2", "ar1")[2], st.time.model = NULL, year_label, year_range = c(1980, 2014), is.yearly=TRUE, m = 5, type.st = 1, survey.effect = FALSE, hyper = c("pc", "gamma")[1], pc.u = 1, pc.alpha = 0.01, pc.u.phi = 0.5, pc.alpha.phi = 2/3, pc.u.cor = 0.7, pc.alpha.cor = 0.9, pc.st.u = NA, pc.st.alpha = NA, control.compute = list(dic = TRUE, mlik = TRUE, cpo = TRUE, openmp.strategy = 'default', config = TRUE), control.inla = list(strategy = "adaptive", int.strategy = "auto"), control.fixed = list(), verbose = FALSE, geo = NULL, rw = NULL, ar = NULL, options = NULL){
 
   if(!is.null(geo)){
     message("Argument geo is deprecated in the smoothDirect function. Only Amat is needed.")
@@ -170,11 +170,18 @@ smoothDirect <- function(data, Amat, formula = NULL, time.model = c("rw1", "rw2"
             "\n  No temporal components")
 
   }else{
+    T <- year_range[2] - year_range[1] + 1
+    if(!is.yearly){
+      T <- length(year_label)
+    }
     message("----------------------------------",
           "\nSmoothed Direct Model",
-            "\n  Main temporal model:        ", time.model, appendLF = FALSE)
-    msg <- paste0(msg, "\nSmoothed Direct Model",
-            "\n  Main temporal model:        ")
+            "\n  Main temporal model:        ", time.model, 
+            "\n  Number of time periods:     ", T, 
+            appendLF = FALSE)
+    msg <- paste0(msg, "\nSmoothed Direct Model", 
+            "\n  Main temporal model:        ", time.model, 
+            "\n  Number of time periods:     ", T)
     if(m == 1){
       if(is.yearly){
         message("\n  Temporal resolution:        period model (m = 1)", appendLF=FALSE)
@@ -221,8 +228,11 @@ smoothDirect <- function(data, Amat, formula = NULL, time.model = c("rw1", "rw2"
   }
 
   if(is.spatial){ 
-    message("\n  Spatial effect:             bym2", appendLF=FALSE) 
-    msg <- paste0(msg, "\n  Spatial effect:             bym2")
+    message("\n  Spatial effect:             bym2",
+            "\n  Number of regions:          ", dim(Amat)[1], 
+             appendLF=FALSE) 
+    msg <- paste0(msg, "\n  Spatial effect:             bym2",
+            "\n  Number of regions:          ", dim(Amat)[1])
   }
   if(is.spatial && is.temporal){
     message("\n  Interaction temporal model: ", st.time.model, 
@@ -950,11 +960,12 @@ if(is.main.ar){
         object.name <- paste("lc", index, sep = "")
         
         lincombs.info[index, c("District", "Year")] <- c(0,i)
-        if(rw == 1){
-          assign(object.name, INLA::inla.make.lincomb(c(list("(Intercept)" = 1,
-                                                time.struct= time ,
-                                                time.unstruct= time), 
-                                                XX)))         
+        if(is.main.ar){
+           tmplin <- list("(Intercept)" = 1,
+                            time.struct= time ,
+                            time.unstruct= time)   
+          tmplin <- c(tmplin, time.slope = (i - center)/(N - 1))
+          assign(object.name, INLA::inla.make.lincomb(c(tmplin, XX)))     
         }else{
           assign(object.name, INLA::inla.make.lincomb(c(list("(Intercept)" = 1,
                                                 time.struct= time ,
@@ -973,8 +984,8 @@ if(is.main.ar){
     }
     
 
-    fit <- INLA::inla(mod, family = "gaussian", control.compute = control.compute, data = exdat, control.predictor = list(compute = TRUE), control.family = list(hyper= list(prec = list(initial= log(1), fixed= TRUE ))), scale = exdat$logit.prec, lincomb = lincombs.fit, control.inla = control.inla, verbose = verbose)
-    out <- list(model = mod, fit = fit, Amat = Amat, newdata = exdat, time = seq(0, N - 1), area = seq(0, region_count - 1), time.area = time.area, survey.table = survey.table, a.iid = a.iid, b.iid = b.iid, a.rw = a.rw, b.rw = b.rw, a.rw = a.rw, b.rw = b.rw, a.icar = a.icar, b.icar = b.icar, lincombs.info = lincombs.info, is.yearly = is.yearly, type.st = type.st, year_range = year_range, year_label = year_label, Amat = Amat, has.Amat = TRUE, is.temporal = is.temporal, msg = msg)
+    fit <- INLA::inla(mod, family = "gaussian", control.compute = control.compute, data = exdat, control.predictor = list(compute = TRUE), control.family = list(hyper= list(prec = list(initial= log(1), fixed= TRUE ))), scale = exdat$logit.prec, lincomb = lincombs.fit, control.inla = control.inla, control.fixed = control.fixed, verbose = verbose)
+    out <- list(model = mod, fit = fit, Amat = Amat, newdata = exdat, time = seq(0, N - 1), area = seq(0, region_count - 1), time.area = time.area, survey.table = survey.table, a.iid = a.iid, b.iid = b.iid, a.rw = a.rw, b.rw = b.rw, a.rw = a.rw, b.rw = b.rw, a.icar = a.icar, b.icar = b.icar, lincombs.info = lincombs.info, control.fixed = control.fixed, is.yearly = is.yearly, type.st = type.st, year_range = year_range, year_label = year_label, Amat = Amat, has.Amat = TRUE, is.temporal = is.temporal, msg = msg)
     class(out) <- "SUMMERmodel"
     return(out)
   }

@@ -22,6 +22,7 @@
 #' @author Zehang Richard Li, Bryan Martin, Laina Mercer
 #' @references Li, Z., Hsiao, Y., Godwin, J., Martin, B. D., Wakefield, J., Clark, S. J., & with support from the United Nations Inter-agency Group for Child Mortality Estimation and its technical advisory group. (2019). \emph{Changes in the spatial distribution of the under-five mortality rate: Small-area analysis of 122 DHS surveys in 262 subregions of 35 countries in Africa.} PloS one, 14(1), e0210645.
 #' @references Mercer, L. D., Wakefield, J., Pantazis, A., Lutambi, A. M., Masanja, H., & Clark, S. (2015). \emph{Space-time smoothing of complex survey data: small area estimation for child mortality.} The annals of applied statistics, 9(4), 1889.
+#' @importFrom haven as_factor
 #' @examples 
 #' \dontrun{
 #' my_fp <- "/myExampleFilepath/surveyData.DTA"
@@ -63,6 +64,9 @@ getBirths <- function(filepath = NULL, data = NULL, surveyyear = NA, variables =
   datnew$dod <- dat[, dob] + dat[, age] + cmc.adjust 
   datnew$obsStop <- dat[, date.interview] + cmc.adjust
   datnew$obsStop[dat[, alive] == "no"] <- datnew$dod[dat[, alive] == "no"]
+  if(sum(is.na(datnew$obsStop)) > 0){
+    stop("Age at death contains NA in the input data for children that were dead at the time of interview. Please check the 'age' and 'alive' variables in the input data.")
+  }
   datnew$died <- (dat[, alive] == "no")
   
   datnew$obsStop[datnew$obsStart == datnew$obsStop] <- datnew$obsStop[datnew$obsStart == datnew$obsStop] + 0.01
@@ -97,6 +101,10 @@ getBirths <- function(filepath = NULL, data = NULL, surveyyear = NA, variables =
   test <- test[test$year>=year.cut[1], ]
   test <- test[test$year<year.cut[length(year.cut)], ]
   if(!is.na(surveyyear)) test <- test[test$year<= surveyyear, ]
+
+  if(max(test$year) < min(year.cut) || min(test$year) > max(year.cut) ){
+    stop("Observations not in the specified period. Please check 'year.cut' argument and input data's CMC codes are corrected specified.")
+  }
   
   # remove observations if last period has no more than min.last.period years.
   # e.g., if last period 15-19, min.last.period = 3
@@ -173,8 +181,17 @@ getBirths <- function(filepath = NULL, data = NULL, surveyyear = NA, variables =
   if(length(strata) == 0){
     test$strata <- NA
   }else if(length(strata) == 1){
+    if("haven_labelled" %in% class(test[, strata])){
+      test$strata <- as.character(haven::as_factor(test[, strata]))
+    }
     test$strata <- test[, strata]
   }else{
+    for(ii in strata){
+      if("haven_labelled" %in% class(test[, ii])){
+        test[, ii] <- as.character(haven::as_factor(test[, ii]))
+      }      
+    }
+
     test$strata <- do.call(paste, c(test[strata], sep="."))
   }
   test$survey_year <- test$survey_year + 1900

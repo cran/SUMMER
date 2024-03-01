@@ -25,8 +25,11 @@
 #' @param direction Direction of the color scheme. It can be either 1 (smaller values are darker) or -1 (higher values are darker). Default is set to 1.
 #' @param cut a vector of values to cut the continuous scale color to discrete intervals. 
 #' @importFrom sp proj4string
+#' @importFrom sf st_crs
+#' @importFrom sf st_centroid
+#' @importFrom sf st_coordinates
+#' @importFrom sf st_as_sf
 #' @importFrom shadowtext geom_shadowtext
-#' @importFrom sp Polygon
 #' @importFrom stats setNames
 #' @author Zehang Richard Li
 #' @examples
@@ -40,7 +43,6 @@
 #' mapPlot(dat, variables = "year", values = "values",
 #' by.data = "region", geo = DemoMap$geo,
 #' by.geo = "NAME_final", is.long = TRUE)
-
 # Plotting data in the wide format
 #' dat <- data.frame(region = c("central",  "eastern", "northern", "western"),
 #' Year1 = stats::rnorm(4), Year2 = stats::rnorm(4),
@@ -56,15 +58,24 @@
 #' @export
 mapPlot <- function(data = NULL, variables, values = NULL, labels = NULL, geo, by.data, by.geo, is.long = FALSE, size = 0.5, removetab = FALSE, border = "gray20", ncol = NULL, ylim = NULL, legend.label = NULL,  per1000 = FALSE, clean = TRUE, size.label = 2, add.adj = FALSE, color.adj = "red", alpha.adj = 0.85, direction = 1, cut = NULL){
     value <- group <- lat <- long <- x0 <- x1 <- y0 <- y1 <- id <- name <- variable <- NULL
+    is.sf <- "sf" %in% class(geo)
 
     # Simple Map Plot
     if(is.null(data)){
-        geo1 <- ggplot2::fortify(geo, region = by.geo)
-        geo2 <- by(geo1, geo1$id, function(x) {sp::Polygon(x[c('long', 'lat')])@labpt})
-        centroids <- stats::setNames(do.call("rbind.data.frame", geo2), c('long', 'lat'))
-        centroids$name <- names(geo2) 
+        if(!is.sf){
+           geo <- sf::st_as_sf(geo)
+        }
+        geo1 <- geo
+        geo1$id <- geo[[by.geo]]
+        centroids <- sf::st_centroid(geo)
+        coord <- sf::st_coordinates(centroids)
+        centroids <- data.frame(name = centroids[[by.geo]], 
+                                long = coord[,1], 
+                                lat = coord[,2])
 
-        g <- ggplot2::ggplot() + ggplot2::geom_polygon(data=geo1, ggplot2::aes(x = long, y = lat, group = group, fill = id), color = border, alpha = .3) + ggplot2::coord_map()  
+        g <- ggplot2::ggplot(data = geo1) 
+        g <- g + ggplot2::geom_sf(ggplot2::aes(fill = id), color = border, alpha = .3) + ggplot2::coord_sf()  
+
 
         if(add.adj){
             mat <- getAmat(geo, names = geo[[by.geo]])
@@ -74,7 +85,7 @@ mapPlot <- function(data = NULL, variables, values = NULL, labels = NULL, geo, b
             for(i in 1:dim(mat)[1]){
                 for(j in 1:i){
                     if(mat[i, j] == 1){
-                        edges[index, ] <- c(centroids2[i, 1], centroids2[j, 1], centroids2[i, 2], centroids2[j, 2])
+                        edges[index, ] <- c(centroids2[i, "long"], centroids2[j, "long"], centroids2[i, "lat"], centroids2[j, "lat"])
                         index <- index + 1
                 }
             }
@@ -82,7 +93,7 @@ mapPlot <- function(data = NULL, variables, values = NULL, labels = NULL, geo, b
         g <- g + ggplot2::geom_segment(data = edges, ggplot2::aes(x = x0, y = y0, xend = x1, yend = y1), color = color.adj, alpha = alpha.adj)
         }
 
-        g <- g + ggplot2::scale_fill_discrete(guide = FALSE) + shadowtext::geom_shadowtext(data = centroids, ggplot2::aes(x = long, y = lat, label = name), check.overlap = TRUE, size = size.label, color = border, bg.colour='white') + ggplot2::theme_bw()
+        g <- g + ggplot2::scale_fill_discrete(guide = 'none') + shadowtext::geom_shadowtext(data = centroids, ggplot2::aes(x = long, y = lat, label = name), check.overlap = TRUE, size = size.label, color = border, bg.colour='white') + ggplot2::theme_bw()
 
         if(clean){
             g <- g + ggplot2::theme_bw() + ggplot2::theme(legend.title=ggplot2::element_text(size=ggplot2::rel(0.7)), axis.title.x=ggplot2::element_blank(), axis.text.x=ggplot2::element_blank(), axis.ticks.x=ggplot2::element_blank(), axis.title.y=ggplot2::element_blank(), axis.text.y=ggplot2::element_blank(), axis.ticks.y=ggplot2::element_blank(), panel.grid.major = ggplot2::element_blank(), panel.grid.minor = ggplot2::element_blank())
@@ -102,9 +113,15 @@ mapPlot <- function(data = NULL, variables, values = NULL, labels = NULL, geo, b
     if (is.null(values) & is.long) {
         stop("values need to be specified for long format input.")
     }
-    has.coord <- !is.na(sp::proj4string(geo))
+    
     regions <- as.character(unique(geo[[by.geo]]))
-    geo <- ggplot2::fortify(geo, region = by.geo)
+    if(!is.sf){
+        # geo <- ggplot2::fortify(geo, region = by.geo)
+        geo <- sf::st_as_sf(geo)
+    }
+    geo$id <- geo[[by.geo]]
+    has.coord <- !is.na(sf::st_crs(geo))
+
     if (!is.long) {
         data <- data[, c(variables, by.data)]
         nonexist <- regions[regions %in% as.character(data[, by.data]) == FALSE]
@@ -146,13 +163,23 @@ mapPlot <- function(data = NULL, variables, values = NULL, labels = NULL, geo, b
     }
     geo2 <- merge(geo, data, by = "id", by.y = by.data)
     g <- ggplot2::ggplot(geo2)
-    if(!is.null(cut)){
-        g <- g + ggplot2::geom_polygon(ggplot2::aes(x = long, y = lat, 
-            group = group, fill = cut(value, cut)), color = border, size = size)
-    }else{
-        g <- g + ggplot2::geom_polygon(ggplot2::aes(x = long, y = lat, 
-            group = group, fill = value), color = border, size = size)
-    }
+    # if(!is.sf){
+    #     if(!is.null(cut)){
+    #         g <- g + ggplot2::geom_polygon(ggplot2::aes(x = long, y = lat, 
+    #             group = group, fill = cut(value, cut)), color = border, size = size)
+    #     }else{
+    #         g <- g + ggplot2::geom_polygon(ggplot2::aes(x = long, y = lat, 
+    #             group = group, fill = value), color = border, size = size)
+    #     }     
+    # # sf version      
+    # }else{
+       if(!is.null(cut)){
+            g <- g + ggplot2::geom_sf(ggplot2::aes(group = group, fill = cut(value, cut)), color = border, size = size) + ggplot2::coord_sf()
+        }else{
+            g <- g + ggplot2::geom_sf(ggplot2::aes(group = group, fill = value), color = border, size = size)  + ggplot2::coord_sf()
+        }   
+    # }
+
     if(length(unique(data$variable)) > 1 || removetab == FALSE){
         if(is.null(ncol)){
             g <- g + ggplot2::facet_wrap(~variable)
@@ -170,7 +197,7 @@ mapPlot <- function(data = NULL, variables, values = NULL, labels = NULL, geo, b
     }else if(!is.null(cut)){
         g <- g + ggplot2::scale_fill_viridis_d(legend.label, direction = direction)
     }
-    if(has.coord) g <- g + ggplot2::coord_map()
+    # if(has.coord) g <- g + ggplot2::coord_map()
 
     if(clean){
         g <- g + ggplot2::theme_bw() + ggplot2::theme(legend.title=ggplot2::element_text(size=ggplot2::rel(0.7)), axis.title.x=ggplot2::element_blank(), axis.text.x=ggplot2::element_blank(), axis.ticks.x=ggplot2::element_blank(), axis.title.y=ggplot2::element_blank(), axis.text.y=ggplot2::element_blank(), axis.ticks.y=ggplot2::element_blank(), panel.grid.major = ggplot2::element_blank(), panel.grid.minor = ggplot2::element_blank())
